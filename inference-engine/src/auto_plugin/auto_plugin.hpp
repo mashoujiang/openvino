@@ -29,7 +29,9 @@ public:
     void SetConfig(const ConfigType& config) override;
 
 private:
-    std::vector<AutoPlugin::DeviceInformation> GetDeviceChoice(const ConfigType&  config) const;
+    std::string GetDeviceChoice() const;
+    std::vector<AutoPlugin::DeviceInformation> ParseMetaDevices(const std::string& devicesRequestsCfg,
+                                                                const ConfigType&  config) const;
 
 protected:
     ConfigType GetSupportedConfig(const ConfigType& config, const AutoPlugin::DeviceName & deviceName) const;

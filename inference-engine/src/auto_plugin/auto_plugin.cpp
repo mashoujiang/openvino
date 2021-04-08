@@ -48,12 +48,14 @@ IE::ExecutableNetworkInternal::Ptr AutoInferencePlugin::LoadExeNetworkImpl(const
     }
 
     auto fullConfig = mergeConfigs(_config, config);
-    auto metaDevices = GetDeviceChoice(fullConfig);
+    auto deviceChoice = GetDeviceChoice();
+    auto metaDevices = ParseMetaDevices(deviceChoice, fullConfig);
 
     // FIXME: always select CPU device now
     DeviceInformation selectedDevice = SelectDevice(metaDevices);
     IE::ExecutableNetwork executableNetwork;
     try {
+        auto deviceQr = GetCore()->QueryNetwork(network, selectedDevice.deviceName, selectedDevice.config);
         executableNetwork = GetCore()->LoadNetwork(network, selectedDevice.deviceName, selectedDevice.config);
     } catch(const IE::Exception &iie) {
         IE_THROW() << "Failed to load network to device named " << selectedDevice.deviceName;
@@ -86,7 +88,8 @@ IE::QueryNetworkResult AutoInferencePlugin::QueryNetwork(const IE::CNNNetwork& n
     queryResult.supportedLayersMap.clear();
 
     auto fullConfig = mergeConfigs(_config, config);
-    auto metaDevices = GetDeviceChoice(fullConfig);
+    auto deviceChoice = GetDeviceChoice();
+    auto metaDevices = ParseMetaDevices(deviceChoice, fullConfig);
     std::unordered_set<std::string> supportedLayers;
     std::unordered_set<std::string> supportedDevices;
     for (auto&& value : metaDevices) {
@@ -161,29 +164,18 @@ IE::Parameter AutoInferencePlugin::GetMetric(const std::string& name,
     }
 }
 
-std::vector<AutoPlugin::DeviceInformation> AutoInferencePlugin::GetDeviceChoice(const ConfigType&  config) const {
-    std::vector<DeviceInformation> metaDevices;
+std::string AutoInferencePlugin::GetDeviceChoice() const {
     std::vector<std::string> availableDevices = GetCore()->GetAvailableDevices();
-
-    auto getDeviceConfig = [&] (const DeviceName & deviceWithID) {
-        IE::DeviceIDParser deviceParser(deviceWithID);
-        std::string deviceName = deviceParser.getDeviceName();
-        ConfigType tconfig = mergeConfigs(_config, config);
-
-        // set device ID if any
-        std::string deviceIDLocal = deviceParser.getDeviceID();
-        if (!deviceIDLocal.empty()) {
-            tconfig[IE::PluginConfigParams::KEY_DEVICE_ID] = deviceIDLocal;
+    std::string allDevices;
+    for (auto && device : availableDevices) {
+        if (device == "AUTO") {
+            continue;
         }
-
-            return GetSupportedConfig(tconfig, deviceName);
-    };
-
-    for (auto && d : availableDevices) {
-        metaDevices.push_back({ d, getDeviceConfig(d)});
+        allDevices += device;
+        allDevices += ((device == availableDevices[availableDevices.size()-1]) ? "" : ",");
     }
 
-  return metaDevices;
+    return allDevices;
 }
 
 //////////////////////////////////// private & protected functions ///////////////////
@@ -198,6 +190,43 @@ ConfigType AutoInferencePlugin::GetSupportedConfig(const ConfigType&  config,
         }
     }
     return supportedConfig;
+}
+
+std::vector<DeviceInformation> AutoInferencePlugin::ParseMetaDevices(const std::string& deviceChoice,
+                                                                     const ConfigType&  config) const {
+    std::vector<DeviceInformation> metaDevices;
+    // parsing the string and splitting to tokens
+    std::vector<std::string> devicesWithRequests;
+    // parsing the string and splitting the comma-separated tokens
+    std::string::size_type i = 0;
+    std::string::size_type idelimeter;
+    while ((idelimeter = deviceChoice.find(',', i)) != std::string::npos) {
+        devicesWithRequests.push_back(deviceChoice.substr(i, idelimeter - i));
+        i = idelimeter + 1;
+    }
+    // last token in the string (which has no comma after that)
+    devicesWithRequests.push_back(deviceChoice.substr(i, deviceChoice.length() - i));
+
+    auto getDeviceConfig = [&] (const DeviceName & deviceWithID) {
+        IE::DeviceIDParser deviceParser(deviceWithID);
+        std::string deviceName = deviceParser.getDeviceName();
+        ConfigType tconfig = mergeConfigs(_config, config);
+
+        // set device ID if any
+        std::string deviceIDLocal = deviceParser.getDeviceID();
+        if (!deviceIDLocal.empty()) {
+            tconfig[IE::PluginConfigParams::KEY_DEVICE_ID] = deviceIDLocal;
+        }
+
+        return GetSupportedConfig(tconfig, deviceName);
+    };
+
+    for (auto && d : devicesWithRequests) {
+        // create meta device
+        metaDevices.push_back({ d, getDeviceConfig(d)});
+    }
+
+    return metaDevices;
 }
 
 // define CreatePluginEngine to create plugin instance
