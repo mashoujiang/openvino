@@ -33,6 +33,9 @@ public:
     std::vector<AutoPlugin::DeviceInformation> ParseMetaDevices(const std::string & devicesRequestsCfg,
                                                                        const std::map<std::string, std::string> & config) const;
 
+private:
+    static std::string GetPriorityDevice();
+
 protected:
     std::map<std::string, std::string> GetSupportedConfig(const std::map<std::string, std::string>& config,
                                                           const AutoPlugin::DeviceName & deviceName) const;

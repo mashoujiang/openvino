@@ -11,6 +11,7 @@
 
 #include <ie_core.hpp>
 #include <multi-device/multi_device_config.hpp>
+#include <auto_plugin/auto_config.hpp>
 #include <ngraph/opsets/opset.hpp>
 #include <ngraph/ngraph.hpp>
 #include <ngraph/graph_util.hpp>
@@ -51,6 +52,11 @@ Parsed<T> parseDeviceNameIntoConfig(const std::string& deviceName, const std::ma
     } else if (deviceName_.find("MULTI:") == 0) {
         deviceName_ = "MULTI";
         config_[InferenceEngine::MultiDeviceConfigParams::KEY_MULTI_DEVICE_PRIORITIES] = deviceName.substr(6);
+    } else if (deviceName_.find("AUTO") == 0) {
+        deviceName_ = "AUTO";
+        if (deviceName.size() > std::string("AUTO").size()) {
+            config_[InferenceEngine::AutoConfigParams::KEY_AUTO_DEVICE_PRIORITIES] = deviceName.substr(std::string("AUTO:").size());
+        }
     } else {
         DeviceIDParser parser(deviceName_);
         deviceName_ = parser.getDeviceName();
@@ -581,6 +587,15 @@ public:
             }
         }
 
+        // AUTO case
+        {
+          if (deviceName.find("AUTO") == 0) {
+            IE_THROW()
+                << "You can get specific metrics with the GetMetric only for the AUTO itself (without devices). "
+                   "To get individual devices's metrics call GetMetric for each device separately";
+          }
+        }
+
         auto parsed = parseDeviceNameIntoConfig(deviceName);
 
         // we need to return a copy of Parameter object which is created on Core side,
@@ -714,7 +729,7 @@ public:
      * @brief Sets config values for a plugin or set of plugins
      * @param deviceName A device name to set config to
      *        If empty, config is set for all the plugins / plugin's meta-data
-     * @note  `deviceName` is not allowed in form of MULTI:CPU, HETERO:FPGA,CPU
+     * @note  `deviceName` is not allowed in form of MULTI:CPU, HETERO:FPGA,CPU, AUTO:CPU
      *        just simple forms like CPU, GPU, MULTU, GPU.0, etc
      */
     void SetConfigForPlugins(const std::map<std::string, std::string>& configMap, const std::string& deviceName) {
@@ -814,6 +829,12 @@ std::map<std::string, Version> Core::GetVersions(const std::string& deviceName) 
                 deviceNames = DeviceIDParser::getMultiDevices(deviceName.substr(pos + 1));
             }
             deviceNames.push_back("MULTI");
+        } else if (deviceName.find("AUTO") == 0) {
+            auto pos = deviceName.find_first_of(":");
+            if (pos != std::string::npos) {
+              deviceNames = DeviceIDParser::getMultiDevices(deviceName.substr(pos + 1));
+            }
+            deviceNames.push_back("AUTO");
         } else {
             deviceNames.push_back(deviceName);
         }
@@ -870,8 +891,12 @@ RemoteContext::Ptr Core::CreateContext(const std::string& deviceName, const Para
     if (deviceName.find("MULTI") == 0) {
         IE_THROW() << "MULTI device does not support remote context";
     }
+    if (deviceName.find("AUTO") == 0) {
+        IE_THROW() << "AUTO device does not support remote context";
+    }
 
-    auto parsed = parseDeviceNameIntoConfig(deviceName, params);
+
+  auto parsed = parseDeviceNameIntoConfig(deviceName, params);
     return _impl->GetCPPPluginByName(parsed._deviceName).CreateContext(parsed._config);
 }
 
@@ -881,6 +906,9 @@ RemoteContext::Ptr Core::GetDefaultContext(const std::string& deviceName) {
     }
     if (deviceName.find("MULTI") == 0) {
         IE_THROW() << "MULTI device does not support remote context";
+    }
+    if (deviceName.find("AUTO") == 0) {
+       IE_THROW() << "AUTO device does not support remote context";
     }
 
     auto parsed = parseDeviceNameIntoConfig(deviceName, ParamMap());
@@ -895,6 +923,10 @@ void Core::AddExtension(IExtensionPtr extension, const std::string& deviceName_)
     if (deviceName_.find("MULTI") == 0) {
         IE_THROW()
             << "MULTI device does not support extensions. Please, set extensions directly to fallback devices";
+    }
+    if (deviceName_.find("AUTO") == 0) {
+        IE_THROW()
+           << "AUTO device does not support extensions. Please, set extensions directly to fallback devices";
     }
 
     _impl->AddExtension(extension);
@@ -914,6 +946,9 @@ ExecutableNetwork Core::ImportNetwork(const std::string& modelFileName, const st
     }
     if (deviceName.find("MULTI") == 0) {
         IE_THROW() << "MULTI device does not support ImportNetwork";
+    }
+    if (deviceName.find("AUTO") == 0) {
+        IE_THROW() << "AUTO device does not support ImportNetwork";
     }
 
     auto parsed = parseDeviceNameIntoConfig(deviceName, config);
@@ -960,6 +995,12 @@ void Core::SetConfig(const std::map<std::string, std::string>& config, const std
                                 "You can configure the devices with SetConfig before creating the MULTI on top.";
     }
 
+    // AUTO case
+    if (deviceName.find("AUTO:") == 0) {
+        IE_THROW() << "SetConfig is supported only for AUTO itself (without devices). "
+                               "You can configure the devices with SetConfig before creating the AUTO on top.";
+    }
+
     // GPU.0, FPGA.1 cases
     if (deviceName.find(".") != std::string::npos) {
         IE_THROW() << "SetConfig is supported only for device family itself (without particular device .#). "
@@ -991,6 +1032,14 @@ Parameter Core::GetConfig(const std::string& deviceName, const std::string& name
                    "GetConfig is also possible for the individual devices before creating the MULTI on top.";
         }
     }
+  // AUTO case
+  {
+    if (deviceName.find("AUTO:") == 0) {
+      IE_THROW()
+          << "You can only GetConfig of the AUTO itself (without devices). "
+             "GetConfig is also possible for the individual devices before creating the AUTO on top.";
+    }
+  }
 
     auto parsed = parseDeviceNameIntoConfig(deviceName);
 

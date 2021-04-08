@@ -13,6 +13,7 @@
 
 #include <ie_metric_helpers.hpp>
 #include <auto_plugin/auto_config.hpp>
+#include <ie_core.hpp>
 #include <threading/ie_executor_manager.hpp>
 #include "auto_plugin.hpp"
 
@@ -141,6 +142,26 @@ InferenceEngine::Parameter AutoInferencePlugin::GetMetric(const std::string& nam
     }
 }
 
+std::string AutoInferencePlugin::GetPriorityDevice() {
+    Core ie;
+    auto devices = ie.GetAvailableDevices();
+
+    auto gna = std::find(devices.begin(), devices.end(), "GNA");
+    if (gna != devices.end()) {
+        devices.erase(gna);
+    }
+    if (devices.empty()) {
+        IE_THROW() << "No available devices";
+    }
+    // sort devices: VPU > GNA > GPU > CPU
+    std::sort(devices.begin(), devices.end(), [](std::string& a, std::string&b)->bool{ return b < a;});
+    std::cout << "Available device lists:";
+    std::copy(devices.begin(), devices.end(), std::ostream_iterator<std::string>(std::cout, " "));
+    std::cout << std::endl;
+
+    return devices[0];
+}
+
 ExecutableNetworkInternal::Ptr AutoInferencePlugin::LoadExeNetworkImpl(const CNNNetwork &network,
                                                                               const std::map<std::string, std::string>& config) {
     if (GetCore() == nullptr) {
@@ -154,14 +175,16 @@ ExecutableNetworkInternal::Ptr AutoInferencePlugin::LoadExeNetworkImpl(const CNN
     auto fullConfig = mergeConfigs(_config, config);
     auto priorities = fullConfig.find(AutoConfigParams::KEY_AUTO_DEVICE_PRIORITIES);
     if (priorities == fullConfig.end()) {
-        IE_THROW() << "KEY_AUTO_DEVICE_PRIORITIES key is not set for AUTO device";
+        auto priorityDevice = GetPriorityDevice();
+        std::cout << "KEY_AUTO_DEVICE_PRIORITIES key is not found, AUTO schedule to " << priorityDevice << std::endl;
+        fullConfig.emplace(AutoConfigParams::KEY_AUTO_DEVICE_PRIORITIES, priorityDevice);
     }
 
-    auto metaDevices = ParseMetaDevices(priorities->second, fullConfig);
+    auto metaDevices = ParseMetaDevices(fullConfig[AutoConfigParams::KEY_AUTO_DEVICE_PRIORITIES], fullConfig);
 
     // collect the settings that are applicable to the devices we are loading the network to
     std::unordered_map<std::string, InferenceEngine::Parameter> autoNetworkConfig;
-    autoNetworkConfig.insert(*priorities);
+    autoNetworkConfig.insert(*fullConfig.find(AutoConfigParams::KEY_AUTO_DEVICE_PRIORITIES));
 
     DeviceMap<ExecutableNetwork> executableNetworkPerDevice;
     std::mutex load_mutex;
