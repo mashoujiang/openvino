@@ -8,6 +8,7 @@
 #include <map>
 #include <vector>
 #include <string>
+#include <unordered_set>
 
 #include <cpp_interfaces/impl/ie_plugin_internal.hpp>
 #include <cpp_interfaces/interface/ie_internal_plugin_config.hpp>
@@ -34,11 +35,14 @@ public:
                                                                        const std::map<std::string, std::string> & config) const;
 
 private:
-    static std::string GetPriorityDevice();
+    static std::string GetPriorityDevices();
 
 protected:
     std::map<std::string, std::string> GetSupportedConfig(const std::map<std::string, std::string>& config,
                                                           const AutoPlugin::DeviceName & deviceName) const;
+
+private:
+    mutable std::unordered_set<std::string> _supportedDevices;
 };
 
 }  // namespace AutoPlugin
