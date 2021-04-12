@@ -142,24 +142,25 @@ InferenceEngine::Parameter AutoInferencePlugin::GetMetric(const std::string& nam
     }
 }
 
-std::string AutoInferencePlugin::GetPriorityDevice() {
+std::string AutoInferencePlugin::GetPriorityDevices() {
     Core ie;
     auto devices = ie.GetAvailableDevices();
 
-    auto gna = std::find(devices.begin(), devices.end(), "GNA");
-    if (gna != devices.end()) {
-        devices.erase(gna);
-    }
     if (devices.empty()) {
         IE_THROW() << "No available devices";
     }
     // sort devices: VPU > GNA > GPU > CPU
     std::sort(devices.begin(), devices.end(), [](std::string& a, std::string&b)->bool{ return b < a;});
-    std::cout << "Available device lists:";
-    std::copy(devices.begin(), devices.end(), std::ostream_iterator<std::string>(std::cout, " "));
-    std::cout << std::endl;
 
-    return devices[0];
+    std::string allDevices;
+    std::vector<std::string> availableDevices = ie.GetAvailableDevices();
+    for (auto && device : availableDevices) {
+        allDevices += device;
+        allDevices += ((device == availableDevices[availableDevices.size()-1]) ? "" : ",");
+    }
+    std::cout << "Available device lists: " << allDevices << std::endl;
+
+    return allDevices;
 }
 
 ExecutableNetworkInternal::Ptr AutoInferencePlugin::LoadExeNetworkImpl(const CNNNetwork &network,
@@ -172,12 +173,21 @@ ExecutableNetworkInternal::Ptr AutoInferencePlugin::LoadExeNetworkImpl(const CNN
         IE_THROW() << "AUTO device supports just ngraph network representation";
     }
 
+    if (_supportedDevices.empty()) {
+       QueryNetwork(network, config);
+    }
+
     auto fullConfig = mergeConfigs(_config, config);
     auto priorities = fullConfig.find(AutoConfigParams::KEY_AUTO_DEVICE_PRIORITIES);
     if (priorities == fullConfig.end()) {
-        auto priorityDevice = GetPriorityDevice();
-        std::cout << "KEY_AUTO_DEVICE_PRIORITIES key is not found, AUTO schedule to " << priorityDevice << std::endl;
-        fullConfig.emplace(AutoConfigParams::KEY_AUTO_DEVICE_PRIORITIES, priorityDevice);
+        std::string priorityDevices;
+        for (auto && device : _supportedDevices) {
+            priorityDevices += device + ",";
+        }
+        priorityDevices.pop_back();
+
+        std::cout << "KEY_AUTO_DEVICE_PRIORITIES key is not found, AUTO schedule to " << priorityDevices << std::endl;
+        fullConfig.emplace(AutoConfigParams::KEY_AUTO_DEVICE_PRIORITIES, priorityDevices);
     }
 
     auto metaDevices = ParseMetaDevices(fullConfig[AutoConfigParams::KEY_AUTO_DEVICE_PRIORITIES], fullConfig);
@@ -190,14 +200,17 @@ ExecutableNetworkInternal::Ptr AutoInferencePlugin::LoadExeNetworkImpl(const CNN
     std::mutex load_mutex;
     std::vector<Task> loads;
     for (auto& p : metaDevices) {
-        loads.push_back([&]() {
-            const auto &deviceName = p.deviceName;
-            const auto &deviceConfig = p.config;
-            auto exec_net = GetCore()->LoadNetwork(network, deviceName, deviceConfig);
-            std::unique_lock<std::mutex> lock{load_mutex};
-            executableNetworkPerDevice.insert({deviceName, exec_net});
-            autoNetworkConfig.insert(deviceConfig.begin(), deviceConfig.end());
-        });
+        if (_supportedDevices.find(p.deviceName) != _supportedDevices.end()) {
+            loads.push_back([&]() {
+              const auto &deviceName = p.deviceName;
+              const auto &deviceConfig = p.config;
+              auto exec_net =
+                  GetCore()->LoadNetwork(network, deviceName, deviceConfig);
+              std::unique_lock<std::mutex> lock{load_mutex};
+              executableNetworkPerDevice.insert({deviceName, exec_net});
+              autoNetworkConfig.insert(deviceConfig.begin(), deviceConfig.end());
+            });
+        }
     }
     auto executor = InferenceEngine::ExecutorManager::getInstance()->getIdleCPUStreamsExecutor(
             IStreamsExecutor::Config{"AutoAsyncLoad",
@@ -245,20 +258,36 @@ QueryNetworkResult AutoInferencePlugin::QueryNetwork(const CNNNetwork&          
     auto fullConfig = mergeConfigs(_config, config);
     auto priorities = fullConfig.find(AutoConfigParams::KEY_AUTO_DEVICE_PRIORITIES);
     if (priorities == fullConfig.end()) {
-        IE_THROW() << "KEY_AUTO_DEVICE_PRIORITIES key is not set for AUTO device";
+        auto priorityDevices = GetPriorityDevices();
+        std::cout << "KEY_AUTO_DEVICE_PRIORITIES key is not found, AUTO schedule to " << priorityDevices << std::endl;
+        fullConfig.emplace(AutoConfigParams::KEY_AUTO_DEVICE_PRIORITIES, priorityDevices);
     }
-    auto metaDevices = ParseMetaDevices(priorities->second, fullConfig);
+    auto metaDevices = ParseMetaDevices(fullConfig[AutoConfigParams::KEY_AUTO_DEVICE_PRIORITIES], fullConfig);
     std::unordered_set<std::string> supportedLayers;
     for (auto&& value : metaDevices) {
-        auto deviceQr = GetCore()->QueryNetwork(network, value.deviceName, value.config);
-        std::unordered_set<std::string> deviceSupportedLayers;
-        for (auto&& layerQr : deviceQr.supportedLayersMap) {
-            deviceSupportedLayers.emplace(layerQr.first);
+        try {
+            auto deviceQr =
+                GetCore()->QueryNetwork(network, value.deviceName, value.config);
+            std::unordered_set<std::string> deviceSupportedLayers;
+            for (auto&& layerQr : deviceQr.supportedLayersMap) {
+                deviceSupportedLayers.emplace(layerQr.first);
+            }
+            supportedLayers = supportedLayers.empty()
+                            ? deviceSupportedLayers : (deviceSupportedLayers.empty()
+                            ? supportedLayers : InferenceEngine::details::Intersection(supportedLayers, deviceSupportedLayers));
+            _supportedDevices.insert(value.deviceName);
+        } catch (...) {
+            std::cout << value.deviceName << " doesn't support queryNetwork\n";
         }
-        supportedLayers = supportedLayers.empty()
-                        ? deviceSupportedLayers : (deviceSupportedLayers.empty()
-                        ? supportedLayers : InferenceEngine::details::Intersection(supportedLayers, deviceSupportedLayers));
     }
+
+    if (_supportedDevices.empty()) {
+        IE_THROW() << "Please, check environment due to no supported devices can be used";
+    }
+    std::cout << "AUTO supported devices: ";
+    std::copy(_supportedDevices.begin(), _supportedDevices.end(), std::ostream_iterator<std::string>(std::cout, " "));
+    std::cout << std::endl;
+
     for (auto&& supportedLayer : supportedLayers) {
         queryResult.supportedLayersMap[supportedLayer] = GetName();
     }
