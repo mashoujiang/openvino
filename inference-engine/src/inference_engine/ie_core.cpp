@@ -592,7 +592,7 @@ public:
 
         // AUTO case
         {
-          if (deviceName.find("AUTO") == 0) {
+          if (deviceName.find("AUTO:") == 0) {
             IE_THROW()
                 << "You can get specific metrics with the GetMetric only for the AUTO itself (without devices). "
                    "To get individual devices's metrics call GetMetric for each device separately";
