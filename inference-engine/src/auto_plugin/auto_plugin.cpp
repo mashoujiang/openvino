@@ -97,15 +97,11 @@ std::vector<DeviceInformation> AutoInferencePlugin::ParseMetaDevices(const std::
 
 InferenceEngine::Parameter AutoInferencePlugin::GetConfig(const std::string& name,
         const std::map<std::string, InferenceEngine::Parameter> & options) const {
-    if (name == AUTO_CONFIG_KEY(DEVICE_PRIORITIES)) {
-        auto it = _config.find(AUTO_CONFIG_KEY(DEVICE_PRIORITIES));
-        if (it == _config.end()) {
-            IE_THROW() << "Value for KEY_AUTO_DEVICE_PRIORITIES is not set";
-        } else {
-            return { it->second };
-        }
+    auto it = _config.find(name);
+    if (it == _config.end() && name != AutoConfigParams::KEY_AUTO_DEVICE_PRIORITIES) {
+        IE_THROW() << "Unsupported config key: " << name << ", Or forgot to SetConfig";
     } else {
-        IE_THROW() << "Unsupported config key: " << name;
+        return { it->second };
     }
 }
 
@@ -129,6 +125,7 @@ InferenceEngine::Parameter AutoInferencePlugin::GetMetric(const std::string& nam
         metrics.push_back(METRIC_KEY(SUPPORTED_METRICS));
         metrics.push_back(METRIC_KEY(FULL_DEVICE_NAME));
         metrics.push_back(METRIC_KEY(SUPPORTED_CONFIG_KEYS));
+        metrics.push_back(METRIC_KEY(OPTIMIZATION_CAPABILITIES));
         IE_SET_METRIC_RETURN(SUPPORTED_METRICS, metrics);
     } else if (name == METRIC_KEY(FULL_DEVICE_NAME)) {
         std::string device_name = { "AUTO" };
@@ -137,23 +134,45 @@ InferenceEngine::Parameter AutoInferencePlugin::GetMetric(const std::string& nam
         std::vector<std::string> configKeys = {
             AutoConfigParams::KEY_AUTO_DEVICE_PRIORITIES};
         IE_SET_METRIC_RETURN(SUPPORTED_CONFIG_KEYS, configKeys);
+    } else if (name == METRIC_KEY(OPTIMIZATION_CAPABILITIES)) {
+        std::vector<std::string> capabilities = GetOptimizationCapabilities();
+        IE_SET_METRIC_RETURN(OPTIMIZATION_CAPABILITIES, capabilities);
     } else {
         IE_THROW() << "Unsupported metric key " << name;
     }
 }
 
-std::string AutoInferencePlugin::GetPriorityDevices() {
-    Core ie;
-    auto devices = ie.GetAvailableDevices();
+std::vector<std::string> AutoInferencePlugin::GetOptimizationCapabilities() const {
+    std::vector<std::string> capabilities;
+    std::vector<std::string> queryDeviceLists{"CPU", "GPU", "GNA", "VPU"};
+    for (auto& item : queryDeviceLists) {
+        try {
+            std::vector<std::string> device_cap =
+                GetCore()->GetMetric(item, METRIC_KEY(OPTIMIZATION_CAPABILITIES));
+            std::string device_cap_str = item + ": ";
+            for (auto &dc : device_cap) {
+              device_cap_str += dc + " ";
+            }
+            capabilities.push_back(device_cap_str);
+        } catch (...) {
+        }
+    }
+    return capabilities;
+}
 
-    if (devices.empty()) {
+
+std::string AutoInferencePlugin::GetPriorityDevices() {
+    // TODO: should delete this WA after thirdparty support query devices.
+    Core ie;
+    auto availableDevices = ie.GetAvailableDevices();
+
+    if (availableDevices.empty()) {
         IE_THROW() << "No available devices";
     }
     // sort devices: VPU > GNA > GPU > CPU
-    std::sort(devices.begin(), devices.end(), [](std::string& a, std::string&b)->bool{ return b < a;});
+    std::sort(availableDevices.begin(), availableDevices.end(), [](std::string& a, std::string&b)->bool{ return b < a;});
 
     std::string allDevices;
-    std::vector<std::string> availableDevices = ie.GetAvailableDevices();
     for (auto && device : availableDevices) {
         allDevices += device;
         allDevices += ((device == availableDevices[availableDevices.size()-1]) ? "" : ",");
@@ -201,15 +220,18 @@ ExecutableNetworkInternal::Ptr AutoInferencePlugin::LoadExeNetworkImpl(const CNN
     std::vector<Task> loads;
     for (auto& p : metaDevices) {
         if (_supportedDevices.find(p.deviceName) != _supportedDevices.end()) {
-            loads.push_back([&]() {
-              const auto &deviceName = p.deviceName;
-              const auto &deviceConfig = p.config;
-              auto exec_net =
-                  GetCore()->LoadNetwork(network, deviceName, deviceConfig);
-              std::unique_lock<std::mutex> lock{load_mutex};
-              executableNetworkPerDevice.insert({deviceName, exec_net});
-              autoNetworkConfig.insert(deviceConfig.begin(), deviceConfig.end());
-            });
+            if (p.deviceName != _pluginName) {
+                loads.push_back([&]() {
+                    const auto &deviceName = p.deviceName;
+                    const auto &deviceConfig = p.config;
+                    auto exec_net =
+                        GetCore()->LoadNetwork(network, deviceName, deviceConfig);
+                    std::unique_lock<std::mutex> lock{load_mutex};
+                    executableNetworkPerDevice.insert({deviceName, exec_net});
+                    autoNetworkConfig.insert(deviceConfig.begin(),
+                                             deviceConfig.end());
+                });
+            }
         }
     }
     auto executor = InferenceEngine::ExecutorManager::getInstance()->getIdleCPUStreamsExecutor(
@@ -266,16 +288,19 @@ QueryNetworkResult AutoInferencePlugin::QueryNetwork(const CNNNetwork&          
     std::unordered_set<std::string> supportedLayers;
     for (auto&& value : metaDevices) {
         try {
-            auto deviceQr =
-                GetCore()->QueryNetwork(network, value.deviceName, value.config);
-            std::unordered_set<std::string> deviceSupportedLayers;
-            for (auto&& layerQr : deviceQr.supportedLayersMap) {
-                deviceSupportedLayers.emplace(layerQr.first);
+            if (value.deviceName != _pluginName) {
+                auto deviceQr = GetCore()->QueryNetwork(network, value.deviceName,
+                                                        value.config);
+                std::unordered_set<std::string> deviceSupportedLayers;
+                for (auto &&layerQr : deviceQr.supportedLayersMap) {
+                  deviceSupportedLayers.emplace(layerQr.first);
+                }
+                supportedLayers = supportedLayers.empty()
+                                ? deviceSupportedLayers : (deviceSupportedLayers.empty()
+                                ? supportedLayers : InferenceEngine::details::Intersection(
+                                     supportedLayers, deviceSupportedLayers));
+                _supportedDevices.insert(value.deviceName);
             }
-            supportedLayers = supportedLayers.empty()
-                            ? deviceSupportedLayers : (deviceSupportedLayers.empty()
-                            ? supportedLayers : InferenceEngine::details::Intersection(supportedLayers, deviceSupportedLayers));
-            _supportedDevices.insert(value.deviceName);
         } catch (...) {
             std::cout << value.deviceName << " doesn't support queryNetwork\n";
         }

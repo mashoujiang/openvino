@@ -55,6 +55,10 @@ Parsed<T> parseDeviceNameIntoConfig(const std::string& deviceName, const std::ma
     } else if (deviceName_.find("AUTO") == 0) {
         deviceName_ = "AUTO";
         if (deviceName.size() > std::string("AUTO").size()) {
+            std::string priorityDevice = deviceName.substr(std::string("AUTO:").size());
+            if (priorityDevice.find("AUTO") != std::string::npos) {
+                IE_THROW() << "Priority device should not be AUTO";
+            }
             config_[InferenceEngine::AutoConfigParams::KEY_AUTO_DEVICE_PRIORITIES] = deviceName.substr(std::string("AUTO:").size());
         }
     } else {
@@ -592,11 +596,11 @@ public:
 
         // AUTO case
         {
-          if (deviceName.find("AUTO:") == 0) {
-            IE_THROW()
-                << "You can get specific metrics with the GetMetric only for the AUTO itself (without devices). "
-                   "To get individual devices's metrics call GetMetric for each device separately";
-          }
+            if (deviceName.find("AUTO:") == 0) {
+                IE_THROW()
+                    << "You can get specific metrics with the GetMetric only for the AUTO itself (without devices). "
+                       "To get individual devices's metrics call GetMetric for each device separately";
+            }
         }
 
         auto parsed = parseDeviceNameIntoConfig(deviceName);
@@ -1035,13 +1039,13 @@ Parameter Core::GetConfig(const std::string& deviceName, const std::string& name
                    "GetConfig is also possible for the individual devices before creating the MULTI on top.";
         }
     }
-  // AUTO case
-  {
-    if (deviceName.find("AUTO:") == 0) {
-      IE_THROW()
-          << "You can only GetConfig of the AUTO itself (without devices). "
-             "GetConfig is also possible for the individual devices before creating the AUTO on top.";
-    }
+    // AUTO case
+    {
+        if (deviceName.find("AUTO:") == 0) {
+            IE_THROW()
+                << "You can only GetConfig of the AUTO itself (without devices). "
+                   "GetConfig is also possible for the individual devices before creating the AUTO on top.";
+      }
   }
 
     auto parsed = parseDeviceNameIntoConfig(deviceName);
