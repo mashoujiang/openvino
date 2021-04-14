@@ -36,6 +36,7 @@ public:
 
 private:
     static std::string GetPriorityDevices();
+    std::vector<std::string> GetOptimizationCapabilities() const;
 
 protected:
     std::map<std::string, std::string> GetSupportedConfig(const std::map<std::string, std::string>& config,
