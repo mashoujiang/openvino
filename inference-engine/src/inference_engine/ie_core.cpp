@@ -58,6 +58,9 @@ Parsed<T> parseDeviceNameIntoConfig(const std::string& deviceName, const std::ma
             config_[InferenceEngine::AutoConfigParams::KEY_AUTO_DEVICE_PRIORITIES] = deviceName.substr(std::string("AUTO:").size());
         }
     } else {
+        if (deviceName_ == "") {
+            deviceName_ = "AUTO";
+        }
         DeviceIDParser parser(deviceName_);
         deviceName_ = parser.getDeviceName();
         std::string deviceIDLocal = parser.getDeviceID();
