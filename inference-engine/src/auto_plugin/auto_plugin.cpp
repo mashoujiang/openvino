@@ -122,11 +122,16 @@ InferenceEngine::Parameter AutoInferencePlugin::GetMetric(const std::string& nam
                                          const std::map<std::string, InferenceEngine::Parameter> & options) const {
     if (name == METRIC_KEY(SUPPORTED_METRICS)) {
         std::vector<std::string> metrics;
+        metrics.push_back(METRIC_KEY(AVAILABLE_DEVICES));
         metrics.push_back(METRIC_KEY(SUPPORTED_METRICS));
         metrics.push_back(METRIC_KEY(FULL_DEVICE_NAME));
         metrics.push_back(METRIC_KEY(SUPPORTED_CONFIG_KEYS));
         metrics.push_back(METRIC_KEY(OPTIMIZATION_CAPABILITIES));
         IE_SET_METRIC_RETURN(SUPPORTED_METRICS, metrics);
+    } else if (name == METRIC_KEY(AVAILABLE_DEVICES)) {
+        // FIXME: available devices should get from thirdparty
+        std::vector<std::string> availableDevices = { "" };
+        IE_SET_METRIC_RETURN(AVAILABLE_DEVICES, availableDevices);
     } else if (name == METRIC_KEY(FULL_DEVICE_NAME)) {
         std::string device_name = { "AUTO" };
         IE_SET_METRIC_RETURN(FULL_DEVICE_NAME, device_name);
