@@ -148,6 +148,7 @@ InferenceEngine::Parameter AutoInferencePlugin::GetMetric(const std::string& nam
 }
 
 std::vector<std::string> AutoInferencePlugin::GetOptimizationCapabilities() const {
+    // FIXME: workaround to get devicelist.
     std::vector<std::string> capabilities;
     std::vector<std::string> queryDeviceLists{"CPU", "GPU", "GNA", "VPU"};
     for (auto& item : queryDeviceLists) {
@@ -174,8 +175,6 @@ std::string AutoInferencePlugin::GetPriorityDevices() {
     if (availableDevices.empty()) {
         IE_THROW() << "No available devices";
     }
-    // sort devices: VPU > GNA > GPU > CPU
-    std::sort(availableDevices.begin(), availableDevices.end(), [](std::string& a, std::string&b)->bool{ return b < a;});
 
     std::string allDevices;
     for (auto && device : availableDevices) {
@@ -185,6 +184,14 @@ std::string AutoInferencePlugin::GetPriorityDevices() {
     std::cout << "Available device lists: " << allDevices << std::endl;
 
     return allDevices;
+}
+
+const AutoPlugin::DeviceInformation& AutoInferencePlugin::SelectDevicePolicy(const std::vector<AutoPlugin::DeviceInformation>& metaDevices) const {
+    // TODO
+    // TODO: network precision to match optimization_capabilities
+
+    // TODO: gigaflops
+    return metaDevices[0];
 }
 
 ExecutableNetworkInternal::Ptr AutoInferencePlugin::LoadExeNetworkImpl(const CNNNetwork &network,
@@ -198,7 +205,7 @@ ExecutableNetworkInternal::Ptr AutoInferencePlugin::LoadExeNetworkImpl(const CNN
     }
 
     if (_supportedDevices.empty()) {
-       QueryNetwork(network, config);
+        QueryNetwork(network, config);
     }
 
     auto fullConfig = mergeConfigs(_config, config);
@@ -216,55 +223,40 @@ ExecutableNetworkInternal::Ptr AutoInferencePlugin::LoadExeNetworkImpl(const CNN
 
     auto metaDevices = ParseMetaDevices(fullConfig[AutoConfigParams::KEY_AUTO_DEVICE_PRIORITIES], fullConfig);
 
+    DeviceMap<ExecutableNetwork> executableNetworkPerDevice;
+
     // collect the settings that are applicable to the devices we are loading the network to
     std::unordered_map<std::string, InferenceEngine::Parameter> autoNetworkConfig;
     autoNetworkConfig.insert(*fullConfig.find(AutoConfigParams::KEY_AUTO_DEVICE_PRIORITIES));
+    DeviceInformation selectedDevice;
+    while (!metaDevices.empty()) {
+        try {
+            // TODO: device selection
+            const auto &tempSeletedDevice = SelectDevicePolicy(metaDevices);
+            const auto &deviceName = tempSeletedDevice.deviceName;
+            const auto &deviceConfig = tempSeletedDevice.config;
+            auto exec_net =
+                GetCore()->LoadNetwork(network, deviceName, deviceConfig);
 
-    DeviceMap<ExecutableNetwork> executableNetworkPerDevice;
-    std::mutex load_mutex;
-    std::vector<Task> loads;
-    for (auto& p : metaDevices) {
-        if (_supportedDevices.find(p.deviceName) != _supportedDevices.end()) {
-            if (p.deviceName != _pluginName) {
-                loads.push_back([&]() {
-                    const auto &deviceName = p.deviceName;
-                    const auto &deviceConfig = p.config;
-                    auto exec_net =
-                        GetCore()->LoadNetwork(network, deviceName, deviceConfig);
-                    std::unique_lock<std::mutex> lock{load_mutex};
-                    executableNetworkPerDevice.insert({deviceName, exec_net});
-                    autoNetworkConfig.insert(deviceConfig.begin(),
-                                             deviceConfig.end());
-                });
-            }
+            executableNetworkPerDevice.insert({deviceName, exec_net});
+            selectedDevice = tempSeletedDevice;
+            break;
+        } catch(...) {
+            IE_THROW() << "Device is not supported";
         }
     }
-    auto executor = InferenceEngine::ExecutorManager::getInstance()->getIdleCPUStreamsExecutor(
-            IStreamsExecutor::Config{"AutoAsyncLoad",
-                                     static_cast<int>(std::thread::hardware_concurrency()) /* max possible #streams*/,
-                                     1 /*single thread per stream*/,
-                                     IStreamsExecutor::ThreadBindingType::NONE});
-    executor->runAndWait(loads);
-    if (executableNetworkPerDevice.empty())
-        IE_THROW(NotFound) << "Failed to load network to any device "
-                                            <<  "that the AUTO device is initialized to work with";
-
-    // checking the perf counters config from the loaded network to respect both device's plugin and load-specific setting
-    size_t num_plugins_supporting_perf_counters = 0;
-    for (auto n : executableNetworkPerDevice) {
-            try {
-                num_plugins_supporting_perf_counters +=
-                        n.second.GetConfig(PluginConfigParams::KEY_PERF_COUNT).as<std::string>() ==
-                        PluginConfigParams::YES;
-            } catch (...) {
-            }
+    bool enablePerfCounters = false;
+    try {
+      enablePerfCounters =
+          executableNetworkPerDevice[selectedDevice.deviceName].GetConfig(PluginConfigParams::KEY_PERF_COUNT).as<std::string>() ==
+          PluginConfigParams::YES;
+    } catch (...) {
     }
-    // AUTO can enable the perf counters only if all  devices support/enable that
-    bool enablePerfCounters = num_plugins_supporting_perf_counters == executableNetworkPerDevice.size();
+
     return std::make_shared<AutoExecutableNetwork>(executableNetworkPerDevice,
-                                                          metaDevices,
-                                                          autoNetworkConfig,
-                                                          enablePerfCounters);
+                                                   std::vector<DeviceInformation>{selectedDevice},
+                                                   autoNetworkConfig,
+                                                   enablePerfCounters);
 }
 
 QueryNetworkResult AutoInferencePlugin::QueryNetwork(const CNNNetwork&                         network,
