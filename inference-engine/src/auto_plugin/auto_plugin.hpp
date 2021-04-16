@@ -13,6 +13,7 @@
 #include <cpp_interfaces/impl/ie_plugin_internal.hpp>
 #include <cpp_interfaces/interface/ie_internal_plugin_config.hpp>
 #include "auto_exec_network.hpp"
+#include "auto_schedule_policy.hpp"
 
 namespace AutoPlugin {
 
@@ -37,7 +38,7 @@ public:
 private:
     static std::string GetPriorityDevices();
     std::vector<std::string> GetOptimizationCapabilities() const;
-    std::vector<DeviceInformation>::const_iterator  SelectDevicePolicy(const std::vector<AutoPlugin::DeviceInformation>& metaDevices) const;
+    void RegisterPolicy(SchedulePolicyType type);
 
 protected:
     std::map<std::string, std::string> GetSupportedConfig(const std::map<std::string, std::string>& config,
@@ -45,6 +46,7 @@ protected:
 
 private:
     mutable std::unordered_set<std::string> _supportedDevices;
+    std::unordered_map<SchedulePolicyType, AutoSchedulePolicy::Ptr> _policies;
 };
 
 }  // namespace AutoPlugin
