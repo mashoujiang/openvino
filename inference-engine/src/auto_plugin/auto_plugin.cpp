@@ -116,6 +116,8 @@ IE_DEFINE_PLUGIN_CREATE_FUNCTION(AutoInferencePlugin, version)
 
 AutoInferencePlugin::AutoInferencePlugin() {
     _pluginName = "AUTO";
+    // FIXME: maybe config by ie config is better way
+    RegisterPolicy(SchedulePolicyType::STATIC);
 }
 
 InferenceEngine::Parameter AutoInferencePlugin::GetMetric(const std::string& name,
@@ -186,14 +188,6 @@ std::string AutoInferencePlugin::GetPriorityDevices() {
     return allDevices;
 }
 
-std::vector<DeviceInformation>::const_iterator AutoInferencePlugin::SelectDevicePolicy(const std::vector<AutoPlugin::DeviceInformation>& metaDevices) const {
-    // TODO
-    // TODO: network precision to match optimization_capabilities
-
-    // TODO: gigaflops
-    return metaDevices.begin();
-}
-
 ExecutableNetworkInternal::Ptr AutoInferencePlugin::LoadExeNetworkImpl(const CNNNetwork &network,
                                                                               const std::map<std::string, std::string>& config) {
     if (GetCore() == nullptr) {
@@ -231,8 +225,8 @@ ExecutableNetworkInternal::Ptr AutoInferencePlugin::LoadExeNetworkImpl(const CNN
 
     while (!metaDevices.empty()) {
         try {
-            // TODO: device selection
-            selectedDevice = SelectDevicePolicy(metaDevices);
+            // TODO: schedule policy type should be set by config
+            selectedDevice = _policies[SchedulePolicyType::STATIC]->SelectDevicePolicy(metaDevices);
             const auto &deviceName = selectedDevice->deviceName;
             const auto &deviceConfig = selectedDevice->config;
             auto exec_net =
@@ -241,6 +235,7 @@ ExecutableNetworkInternal::Ptr AutoInferencePlugin::LoadExeNetworkImpl(const CNN
             executableNetwork = exec_net;
             break;
         } catch(...) {
+            std::cout << "load network failed to device named " << selectedDevice->deviceName << std::endl;
             metaDevices.erase(selectedDevice);
         }
     }
@@ -322,4 +317,7 @@ QueryNetworkResult AutoInferencePlugin::QueryNetwork(const CNNNetwork&          
     return queryResult;
 }
 
+void AutoInferencePlugin::RegisterPolicy(SchedulePolicyType type) {
+        _policies.emplace(type, new AutoSchedulePolicy(type));
+}
 }  // namespace AutoPlugin
