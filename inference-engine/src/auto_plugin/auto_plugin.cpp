@@ -157,7 +157,7 @@ std::vector<std::string> AutoInferencePlugin::GetOptimizationCapabilities() cons
                 GetCore()->GetMetric(item, METRIC_KEY(OPTIMIZATION_CAPABILITIES));
             std::string device_cap_str = item + ": ";
             for (auto &dc : device_cap) {
-              device_cap_str += dc + " ";
+                device_cap_str += dc + " ";
             }
             capabilities.push_back(device_cap_str);
         } catch (...) {
@@ -186,12 +186,12 @@ std::string AutoInferencePlugin::GetPriorityDevices() {
     return allDevices;
 }
 
-const AutoPlugin::DeviceInformation& AutoInferencePlugin::SelectDevicePolicy(const std::vector<AutoPlugin::DeviceInformation>& metaDevices) const {
+std::vector<DeviceInformation>::const_iterator AutoInferencePlugin::SelectDevicePolicy(const std::vector<AutoPlugin::DeviceInformation>& metaDevices) const {
     // TODO
     // TODO: network precision to match optimization_capabilities
 
     // TODO: gigaflops
-    return metaDevices[0];
+    return metaDevices.begin();
 }
 
 ExecutableNetworkInternal::Ptr AutoInferencePlugin::LoadExeNetworkImpl(const CNNNetwork &network,
@@ -223,38 +223,44 @@ ExecutableNetworkInternal::Ptr AutoInferencePlugin::LoadExeNetworkImpl(const CNN
 
     auto metaDevices = ParseMetaDevices(fullConfig[AutoConfigParams::KEY_AUTO_DEVICE_PRIORITIES], fullConfig);
 
-    DeviceMap<ExecutableNetwork> executableNetworkPerDevice;
-
+    ExecutableNetwork executableNetwork;
     // collect the settings that are applicable to the devices we are loading the network to
     std::unordered_map<std::string, InferenceEngine::Parameter> autoNetworkConfig;
     autoNetworkConfig.insert(*fullConfig.find(AutoConfigParams::KEY_AUTO_DEVICE_PRIORITIES));
-    DeviceInformation selectedDevice;
+    std::vector<DeviceInformation>::const_iterator selectedDevice = metaDevices.end();
+
     while (!metaDevices.empty()) {
         try {
             // TODO: device selection
-            const auto &tempSeletedDevice = SelectDevicePolicy(metaDevices);
-            const auto &deviceName = tempSeletedDevice.deviceName;
-            const auto &deviceConfig = tempSeletedDevice.config;
+            selectedDevice = SelectDevicePolicy(metaDevices);
+            const auto &deviceName = selectedDevice->deviceName;
+            const auto &deviceConfig = selectedDevice->config;
             auto exec_net =
                 GetCore()->LoadNetwork(network, deviceName, deviceConfig);
 
-            executableNetworkPerDevice.insert({deviceName, exec_net});
-            selectedDevice = tempSeletedDevice;
+            executableNetwork = exec_net;
             break;
         } catch(...) {
-            IE_THROW() << "Device is not supported";
+            metaDevices.erase(selectedDevice);
         }
     }
+    if (selectedDevice == metaDevices.end()) {
+        IE_THROW(NotFound) << "Failed to load network to any device "
+                           <<  "that the AUTO device is initialized to work with";
+    }
+
+    std::cout << "AUTO schedule load network to device named "<< selectedDevice->deviceName << std::endl;
+
     bool enablePerfCounters = false;
     try {
-      enablePerfCounters =
-          executableNetworkPerDevice[selectedDevice.deviceName].GetConfig(PluginConfigParams::KEY_PERF_COUNT).as<std::string>() ==
-          PluginConfigParams::YES;
+        enablePerfCounters =
+            executableNetwork.GetConfig(PluginConfigParams::KEY_PERF_COUNT).as<std::string>() ==
+            PluginConfigParams::YES;
     } catch (...) {
     }
 
-    return std::make_shared<AutoExecutableNetwork>(executableNetworkPerDevice,
-                                                   std::vector<DeviceInformation>{selectedDevice},
+    return std::make_shared<AutoExecutableNetwork>(executableNetwork,
+                                                   *selectedDevice,
                                                    autoNetworkConfig,
                                                    enablePerfCounters);
 }
@@ -290,7 +296,7 @@ QueryNetworkResult AutoInferencePlugin::QueryNetwork(const CNNNetwork&          
                                                         value.config);
                 std::unordered_set<std::string> deviceSupportedLayers;
                 for (auto &&layerQr : deviceQr.supportedLayersMap) {
-                  deviceSupportedLayers.emplace(layerQr.first);
+                    deviceSupportedLayers.emplace(layerQr.first);
                 }
                 supportedLayers = supportedLayers.empty()
                                 ? deviceSupportedLayers : (deviceSupportedLayers.empty()

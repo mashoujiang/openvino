@@ -31,9 +31,6 @@ struct DeviceInformation {
     int numRequestsPerDevices;
 };
 
-template<typename T>
-using DeviceMap = std::unordered_map<DeviceName, T>;
-
 #if ((IE_THREAD == IE_THREAD_TBB) || (IE_THREAD == IE_THREAD_TBB_AUTO))
 template <typename T>
 using ThreadSafeQueue = tbb::concurrent_queue<T>;
@@ -105,8 +102,8 @@ public:
     };
     using NotBusyWorkerRequests = ThreadSafeBoundedQueue<WorkerInferRequest*>;
 
-    explicit AutoExecutableNetwork(const DeviceMap<InferenceEngine::ExecutableNetwork>&                  networksPerDevice,
-                                          const std::vector<DeviceInformation>&                                 networkDevices,
+    explicit AutoExecutableNetwork(const InferenceEngine::ExecutableNetwork&                                    network,
+                                          const DeviceInformation&                                              deviceInfo,
                                           const std::unordered_map<std::string, InferenceEngine::Parameter>&    config,
                                           const bool                                                            needPerfCounters = false);
 
@@ -120,21 +117,16 @@ public:
     InferenceEngine::RemoteContext::Ptr GetContext() const override;
     ~AutoExecutableNetwork() override;
 
-    void ScheduleToWorkerInferRequest(InferenceEngine::Task, DeviceName preferred_device = "");
+    void ScheduleToWorkerInferRequest(InferenceEngine::Task);
 
     static thread_local WorkerInferRequest*                     _thisWorkerInferRequest;
-    // have to use the const char* ptr rather than std::string due to a bug in old gcc versions,
-    // the bug is e.g. manifesting on the old CentOS (and it's 4.8.x gcc) used in our testing
-    // https://gcc.gnu.org/bugzilla/show_bug.cgi?id=81880
-    static thread_local const char*                             _thisPreferredDeviceName;
     mutable std::mutex                                          _mutex;
-    std::vector<DeviceInformation>                              _devicePriorities;
-    const std::vector<DeviceInformation>                        _devicePrioritiesInitial;
-    DeviceMap<InferenceEngine::ExecutableNetwork>               _networksPerDevice;
+    DeviceInformation                                           _deviceInfo;
+    const DeviceInformation                                     _deviceInfoInitial;
+    InferenceEngine::ExecutableNetwork                          _network;
     ThreadSafeQueue<InferenceEngine::Task>                      _inferPipelineTasks;
-    DeviceMap<std::unique_ptr<ThreadSafeQueue<InferenceEngine::Task>>> _inferPipelineTasksDeviceSpecific;
-    DeviceMap<NotBusyWorkerRequests>                            _idleWorkerRequests;
-    DeviceMap<std::vector<WorkerInferRequest>>                  _workerRequests;
+    NotBusyWorkerRequests                                       _idleWorkerRequests;
+    std::vector<WorkerInferRequest>                             _workerRequests;
     std::unordered_map<std::string, InferenceEngine::Parameter> _config;
     bool                                                        _needPerfCounters = false;
     std::atomic_size_t                                          _numRequestsCreated = {0};
