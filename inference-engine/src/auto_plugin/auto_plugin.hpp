@@ -32,12 +32,12 @@ public:
                                          const std::map<std::string, InferenceEngine::Parameter>& options) const override;
 
     std::vector<AutoPlugin::DeviceInformation> ParseMetaDevices(const std::string & devicesRequestsCfg,
-                                                                       const std::map<std::string, std::string> & config) const;
+                                                                const std::map<std::string, std::string> & config) const;
 
 private:
     static std::string GetPriorityDevices();
     std::vector<std::string> GetOptimizationCapabilities() const;
-    const AutoPlugin::DeviceInformation& SelectDevicePolicy(const std::vector<AutoPlugin::DeviceInformation>& metaDevices) const;
+    std::vector<DeviceInformation>::const_iterator  SelectDevicePolicy(const std::vector<AutoPlugin::DeviceInformation>& metaDevices) const;
 
 protected:
     std::map<std::string, std::string> GetSupportedConfig(const std::map<std::string, std::string>& config,
