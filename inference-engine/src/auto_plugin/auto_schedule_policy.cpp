@@ -15,10 +15,53 @@ public:
 class AutoStaticPolicy: public AutoSchedulePolicy::Priv{
 public:
     VecDeviceCiter SelectDevicePolicy(const VecDevice& metaDevices) const override;
+
+private:
+    mutable std::mutex _mutex;
 };
 
 VecDeviceCiter AutoStaticPolicy::SelectDevicePolicy(const VecDevice& metaDevices) const {
-    return metaDevices.begin();
+    // 1. GPU is an alias for GPU.0
+    // 2. GPU.0 is always iGPU if system has iGPU
+    // 3. GPU.X where X={1,2,3,...} is dGPU if system has both iGPU and dGPU
+    // 4. GPU.0 could be dGPU if system has no iGPU
+    static VecDevice VPUX;
+    static VecDevice GPU;
+    static VecDevice GNA;
+    static VecDevice CPU;
+    std::lock_guard<std::mutex> lockGuard(_mutex);
+    VPUX.clear();
+    GPU.clear();
+    GNA.clear();
+    CPU.clear();
+    for (auto& item : metaDevices) {
+        if (item.deviceName.find("VPUX") == 0) {
+            VPUX.push_back(item);
+            continue;
+        }
+        if (item.deviceName.find("GPU") == 0) {
+            GPU.push_back(item);
+            continue;
+        }
+        if (item.deviceName.find("GNA") == 0) {
+            GNA.push_back(item);
+            continue;
+        }
+        if (item.deviceName.find("CPU") == 0) {
+            CPU.push_back(item);
+            continue;
+        }
+        IE_THROW(NotImplemented) << "Auto plugin doesn't support device named " << item.deviceName;
+    }
+    if (VPUX.empty() && GPU.empty() && GNA.empty() && CPU.empty()) {
+        IE_THROW(NotFound) << "No availabe device found";
+    }
+    std::sort(GPU.begin(), GPU.end(), [](DeviceInformation& a, DeviceInformation& b)->bool{return b.deviceName < a.deviceName;});
+
+    return !VPUX.empty()
+           ? VPUX.begin(): !GPU.empty()
+           ? GPU.begin() : !GNA.empty()
+           ? GNA.begin() : CPU.begin();
 }
 
 AutoSchedulePolicy::AutoSchedulePolicy(SchedulePolicyType type) {
