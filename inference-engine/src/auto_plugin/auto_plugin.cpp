@@ -183,7 +183,7 @@ std::string AutoInferencePlugin::GetPriorityDevices() {
         allDevices += device;
         allDevices += ((device == availableDevices[availableDevices.size()-1]) ? "" : ",");
     }
-    std::cout << "Available device lists: " << allDevices << std::endl;
+    std::cout << "[AUTO] Available device lists: " << allDevices << std::endl;
 
     return allDevices;
 }
@@ -210,8 +210,6 @@ ExecutableNetworkInternal::Ptr AutoInferencePlugin::LoadExeNetworkImpl(const CNN
             priorityDevices += device + ",";
         }
         priorityDevices.pop_back();
-
-        std::cout << "KEY_AUTO_DEVICE_PRIORITIES key is not found, AUTO schedule to " << priorityDevices << std::endl;
         fullConfig.emplace(AutoConfigParams::KEY_AUTO_DEVICE_PRIORITIES, priorityDevices);
     }
 
@@ -235,7 +233,7 @@ ExecutableNetworkInternal::Ptr AutoInferencePlugin::LoadExeNetworkImpl(const CNN
             executableNetwork = exec_net;
             break;
         } catch(...) {
-            std::cout << "load network failed to device named " << selectedDevice->deviceName << std::endl;
+            std::cout << "[AUTO] LoadNetwork failed on device named " << selectedDevice->deviceName << std::endl;
             metaDevices.erase(selectedDevice);
         }
     }
@@ -244,7 +242,7 @@ ExecutableNetworkInternal::Ptr AutoInferencePlugin::LoadExeNetworkImpl(const CNN
                            <<  "that the AUTO device is initialized to work with";
     }
 
-    std::cout << "AUTO schedule load network to device named "<< selectedDevice->deviceName << std::endl;
+    std::cout << "[AUTO] LoadNetwork schedule to device named "<< selectedDevice->deviceName << std::endl;
 
     bool enablePerfCounters = false;
     try {
@@ -279,7 +277,6 @@ QueryNetworkResult AutoInferencePlugin::QueryNetwork(const CNNNetwork&          
     auto priorities = fullConfig.find(AutoConfigParams::KEY_AUTO_DEVICE_PRIORITIES);
     if (priorities == fullConfig.end()) {
         auto priorityDevices = GetPriorityDevices();
-        std::cout << "KEY_AUTO_DEVICE_PRIORITIES key is not found, AUTO schedule to " << priorityDevices << std::endl;
         fullConfig.emplace(AutoConfigParams::KEY_AUTO_DEVICE_PRIORITIES, priorityDevices);
     }
     auto metaDevices = ParseMetaDevices(fullConfig[AutoConfigParams::KEY_AUTO_DEVICE_PRIORITIES], fullConfig);
@@ -300,14 +297,14 @@ QueryNetworkResult AutoInferencePlugin::QueryNetwork(const CNNNetwork&          
                 _supportedDevices.insert(value.deviceName);
             }
         } catch (...) {
-            std::cout << value.deviceName << " doesn't support queryNetwork\n";
+            std::cout << "[AUTO] " << value.deviceName << " doesn't support QueryNetwork\n";
         }
     }
 
     if (_supportedDevices.empty()) {
         IE_THROW() << "Please, check environment due to no supported devices can be used";
     }
-    std::cout << "AUTO supported devices: ";
+    std::cout << "[AUTO] The below devices support QueryNetwork: ";
     std::copy(_supportedDevices.begin(), _supportedDevices.end(), std::ostream_iterator<std::string>(std::cout, " "));
     std::cout << std::endl;
 
