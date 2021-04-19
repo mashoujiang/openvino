@@ -6,6 +6,17 @@
 
 namespace AutoPlugin {
 
+static void printInputAndOutputsInfo(const InferenceEngine::CNNNetwork& network) {
+    std::cout << "Network inputs:" << std::endl;
+    for (auto&& layer : network.getInputsInfo()) {
+        std::cout << "    " << layer.first << " : " << layer.second->getPrecision() << " / " << layer.second->getLayout() << std::endl;
+    }
+    std::cout << "Network outputs:" << std::endl;
+    for (auto&& layer : network.getOutputsInfo()) {
+        std::cout << "    " << layer.first << " : " << layer.second->getPrecision() << " / " << layer.second->getLayout() << std::endl;
+    }
+}
+
 class AutoSchedulePolicy::Priv{
 public:
     virtual ~Priv() = default;
@@ -22,6 +33,7 @@ private:
 };
 
 VecDeviceCiter AutoStaticPolicy::SelectDevice(const InferenceEngine::CNNNetwork &network, const VecDevice& metaDevices) const {
+    printInputAndOutputsInfo(network);
     // 1. GPU is an alias for GPU.0
     // 2. GPU.0 is always iGPU if system has iGPU
     // 3. GPU.X where X={1,2,3,...} is dGPU if system has both iGPU and dGPU
