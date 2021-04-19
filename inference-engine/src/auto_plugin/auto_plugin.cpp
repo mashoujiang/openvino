@@ -224,7 +224,8 @@ ExecutableNetworkInternal::Ptr AutoInferencePlugin::LoadExeNetworkImpl(const CNN
     while (!metaDevices.empty()) {
         try {
             // TODO: schedule policy type should be set by config
-            selectedDevice = _policies[SchedulePolicyType::STATIC]->SelectDevicePolicy(metaDevices);
+            selectedDevice =
+                _policies[SchedulePolicyType::STATIC]->SelectDevice(network, metaDevices);
             const auto &deviceName = selectedDevice->deviceName;
             const auto &deviceConfig = selectedDevice->config;
             auto exec_net =

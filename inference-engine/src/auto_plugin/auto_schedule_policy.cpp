@@ -9,18 +9,19 @@ namespace AutoPlugin {
 class AutoSchedulePolicy::Priv{
 public:
     virtual ~Priv() = default;
-    virtual VecDeviceCiter SelectDevicePolicy(const VecDevice& metaDevices) const = 0;
+    virtual VecDeviceCiter
+    SelectDevice(const InferenceEngine::CNNNetwork &network, const VecDevice& metaDevices) const = 0;
 };
 
 class AutoStaticPolicy: public AutoSchedulePolicy::Priv{
 public:
-    VecDeviceCiter SelectDevicePolicy(const VecDevice& metaDevices) const override;
+    VecDeviceCiter SelectDevice(const InferenceEngine::CNNNetwork &network, const VecDevice& metaDevices) const override;
 
 private:
     mutable std::mutex _mutex;
 };
 
-VecDeviceCiter AutoStaticPolicy::SelectDevicePolicy(const VecDevice& metaDevices) const {
+VecDeviceCiter AutoStaticPolicy::SelectDevice(const InferenceEngine::CNNNetwork &network, const VecDevice& metaDevices) const {
     // 1. GPU is an alias for GPU.0
     // 2. GPU.0 is always iGPU if system has iGPU
     // 3. GPU.X where X={1,2,3,...} is dGPU if system has both iGPU and dGPU
@@ -81,8 +82,8 @@ AutoSchedulePolicy::AutoSchedulePolicy(SchedulePolicyType type) {
 
 AutoSchedulePolicy::~AutoSchedulePolicy() = default;
 
-VecDeviceCiter AutoSchedulePolicy::SelectDevicePolicy(const VecDevice& metaDevices) const {
-    return _priv->SelectDevicePolicy(metaDevices);
+VecDeviceCiter AutoSchedulePolicy::SelectDevice(const InferenceEngine::CNNNetwork &network, const VecDevice& metaDevices) const {
+    return _priv->SelectDevice(network, metaDevices);
 }
 
 std::string AutoSchedulePolicy::StrPolicy(SchedulePolicyType type) {

@@ -9,7 +9,7 @@
 #pragma once
 
 #include "auto_exec_network.hpp"
-
+#include <cpp/ie_cnn_network.h>
 
 namespace AutoPlugin {
 
@@ -28,7 +28,7 @@ public:
     explicit AutoSchedulePolicy(SchedulePolicyType type);
     ~AutoSchedulePolicy();
 
-    VecDeviceCiter SelectDevicePolicy(const VecDevice& metaDevices) const;
+    VecDeviceCiter SelectDevice(const InferenceEngine::CNNNetwork &network, const VecDevice& metaDevices) const;
 
     class Priv;
 
