@@ -34,5 +34,10 @@ namespace AutoConfigParams {
  */
 DECLARE_AUTO_CONFIG_KEY(DEVICE_PRIORITIES);
 
+/**
+ * @brief Schedule type config option, usage like: ie.SetConfig({{"AUTO_SCHEDULE_TYPE", "STATIC"}}, device_name);
+ */
+DECLARE_AUTO_CONFIG_KEY(SCHEDULE_TYPE);
+
 }  // namespace AutoConfigParams
 }  // namespace InferenceEngine

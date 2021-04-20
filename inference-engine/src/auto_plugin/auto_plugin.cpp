@@ -95,11 +95,18 @@ std::vector<DeviceInformation> AutoInferencePlugin::ParseMetaDevices(const std::
     return metaDevices;
 }
 
+SchedulePolicyType AutoInferencePlugin::ParseScheduleType(const std::string & scheduleType) {
+    if (scheduleType == "STATIC" || scheduleType.empty()) {
+      return SchedulePolicyType::STATIC;
+    }
+    IE_THROW(NotImplemented) << "Auto plugin doesn't implement schedule method with type " << scheduleType;
+}
+
 InferenceEngine::Parameter AutoInferencePlugin::GetConfig(const std::string& name,
         const std::map<std::string, InferenceEngine::Parameter> & options) const {
     auto it = _config.find(name);
-    if (it == _config.end() && name != AutoConfigParams::KEY_AUTO_DEVICE_PRIORITIES) {
-        IE_THROW() << "Unsupported config key: " << name << ", Or forgot to SetConfig";
+    if (it == _config.end()) {
+        return {};
     } else {
         return { it->second };
     }
@@ -139,7 +146,9 @@ InferenceEngine::Parameter AutoInferencePlugin::GetMetric(const std::string& nam
         IE_SET_METRIC_RETURN(FULL_DEVICE_NAME, device_name);
     } else if (name == METRIC_KEY(SUPPORTED_CONFIG_KEYS)) {
         std::vector<std::string> configKeys = {
-            AutoConfigParams::KEY_AUTO_DEVICE_PRIORITIES};
+            AutoConfigParams::KEY_AUTO_DEVICE_PRIORITIES,
+            AutoConfigParams::KEY_AUTO_SCHEDULE_TYPE
+        };
         IE_SET_METRIC_RETURN(SUPPORTED_CONFIG_KEYS, configKeys);
     } else if (name == METRIC_KEY(OPTIMIZATION_CAPABILITIES)) {
         std::vector<std::string> capabilities = GetOptimizationCapabilities();
@@ -220,12 +229,12 @@ ExecutableNetworkInternal::Ptr AutoInferencePlugin::LoadExeNetworkImpl(const CNN
     std::unordered_map<std::string, InferenceEngine::Parameter> autoNetworkConfig;
     autoNetworkConfig.insert(*fullConfig.find(AutoConfigParams::KEY_AUTO_DEVICE_PRIORITIES));
     std::vector<DeviceInformation>::const_iterator selectedDevice = metaDevices.end();
-
+    auto scheduleType = ParseScheduleType(fullConfig[AutoConfigParams::KEY_AUTO_SCHEDULE_TYPE]);
     while (!metaDevices.empty()) {
         try {
             // TODO: schedule policy type should be set by config
             selectedDevice =
-                _policies[SchedulePolicyType::STATIC]->SelectDevice(network, metaDevices);
+                _policies[scheduleType]->SelectDevice(network, metaDevices);
             const auto &deviceName = selectedDevice->deviceName;
             const auto &deviceConfig = selectedDevice->config;
             auto exec_net =
