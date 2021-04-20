@@ -67,7 +67,7 @@ VecDeviceCiter AutoStaticPolicy::SelectDevice(const InferenceEngine::CNNNetwork 
         IE_THROW(NotImplemented) << "Auto plugin doesn't support device named " << item.deviceName;
     }
     if (VPUX.empty() && GPU.empty() && GNA.empty() && CPU.empty()) {
-        IE_THROW(NotFound) << "No availabe device found";
+        IE_THROW(NotFound) << "No available device found";
     }
     std::sort(GPU.begin(), GPU.end(), [](DeviceInformation& a, DeviceInformation& b)->bool{return b.deviceName < a.deviceName;});
 

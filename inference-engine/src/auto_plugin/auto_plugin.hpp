@@ -37,6 +37,8 @@ public:
 
 private:
     static std::string GetPriorityDevices();
+    static SchedulePolicyType ParseScheduleType(const std::string & scheduleType);
+
     std::vector<std::string> GetOptimizationCapabilities() const;
     void RegisterPolicy(SchedulePolicyType type);
 
