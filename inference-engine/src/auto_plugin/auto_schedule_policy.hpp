@@ -17,9 +17,7 @@ using VecDevice = std::vector<DeviceInformation>;
 using VecDeviceCiter = std::vector<DeviceInformation>::const_iterator;
 
 enum class SchedulePolicyType {
-  STATIC        = 0,
-  THROUGH_PUT   = 1,
-  LATENCY       = 2
+  STATIC        = 0
 };
 
 class AutoSchedulePolicy{
