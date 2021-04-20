@@ -83,8 +83,6 @@ AutoSchedulePolicy::AutoSchedulePolicy(SchedulePolicyType type) {
             _priv.reset(new AutoStaticPolicy());
             break;
         }
-        case SchedulePolicyType::THROUGH_PUT:
-        case SchedulePolicyType::LATENCY:
         default: {
             IE_THROW(NotImplemented)
                 << "Does not implement schedule type " << StrPolicy(type);
@@ -102,10 +100,6 @@ std::string AutoSchedulePolicy::StrPolicy(SchedulePolicyType type) {
     switch (type) {
     case SchedulePolicyType::STATIC:
         return "STATIC";
-    case SchedulePolicyType::THROUGH_PUT:
-        return "THROUGH_PUT";
-    case SchedulePolicyType::LATENCY:
-        return "LATENCY";
     default:
         return "UNSUPPORT";
     }
