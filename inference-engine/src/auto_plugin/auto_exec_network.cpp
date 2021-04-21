@@ -46,14 +46,14 @@ struct IdleGuard {
     AutoExecutableNetwork::NotBusyWorkerRequests*  _notBusyWorkerRequests = nullptr;
 };
 
-AutoExecutableNetwork::AutoExecutableNetwork(const InferenceEngine::ExecutableNetwork&                                          networkDevices,
-                                                           const DeviceInformation&                                             networksPerDevice,
+AutoExecutableNetwork::AutoExecutableNetwork(const InferenceEngine::ExecutableNetwork&                                          network,
+                                                           const DeviceInformation&                                             deviceInfo,
                                                            const std::unordered_map<std::string, InferenceEngine::Parameter>&   config,
                                                            const bool                                                           needPerfCounters) :
     InferenceEngine::ExecutableNetworkThreadSafeDefault(nullptr, std::make_shared<InferenceEngine::ImmediateExecutor>()),
-    _deviceInfo{networksPerDevice},
-    _deviceInfoInitial{networksPerDevice},
-    _network{networkDevices},
+    _deviceInfo{deviceInfo},
+    _deviceInfoInitial{deviceInfo},
+    _network{network},
     _config{config},
     _needPerfCounters{needPerfCounters} {
     _taskExecutor.reset();
@@ -68,7 +68,7 @@ AutoExecutableNetwork::AutoExecutableNetwork(const InferenceEngine::ExecutableNe
                 << "support OPTIMAL_NUMBER_OF_INFER_REQUESTS ExecutableNetwork metric. "
                 << "Failed to query the metric for the " << deviceName << " with error:" << iie.what();
     }
-    const auto numRequests = _deviceInfo.numRequestsPerDevices == -1 ? optimalNum : _deviceInfo.numRequestsPerDevices;
+    const auto numRequests = _deviceInfo.numRequests == -1 ? optimalNum : _deviceInfo.numRequests;
     _workerRequests.resize(numRequests);
     auto* idleWorkerRequestsPtr = &(_idleWorkerRequests);
     _idleWorkerRequests.set_capacity(numRequests);
