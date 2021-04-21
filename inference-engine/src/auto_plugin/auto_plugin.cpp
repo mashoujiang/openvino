@@ -205,16 +205,16 @@ ExecutableNetworkInternal::Ptr AutoInferencePlugin::LoadExeNetworkImpl(const CNN
     }
 
     auto metaDevices = ParseMetaDevices(fullConfig[AutoConfigParams::KEY_AUTO_DEVICE_PRIORITIES], fullConfig);
-
     ExecutableNetwork executableNetwork;
     // collect the settings that are applicable to the devices we are loading the network to
     std::unordered_map<std::string, InferenceEngine::Parameter> autoNetworkConfig;
     autoNetworkConfig.insert(*fullConfig.find(AutoConfigParams::KEY_AUTO_DEVICE_PRIORITIES));
     DeviceInformation selectedDevice {};
     auto scheduleType = ParseScheduleType(fullConfig[AutoConfigParams::KEY_AUTO_SCHEDULE_TYPE]);
+    auto optCap = GetOptimizationCapabilities();
     while (!metaDevices.empty()) {
+        selectedDevice = _policies[scheduleType]->SelectDevice(network, metaDevices, optCap);
         try {
-            selectedDevice = _policies[scheduleType]->SelectDevice(network, metaDevices);
             auto deviceQr = GetCore()->QueryNetwork(network, selectedDevice.deviceName, selectedDevice.config);
             auto exec_net = GetCore()->LoadNetwork(network, selectedDevice.deviceName, selectedDevice.config);
             executableNetwork = exec_net;
@@ -226,9 +226,11 @@ ExecutableNetworkInternal::Ptr AutoInferencePlugin::LoadExeNetworkImpl(const CNN
 
             auto temp = std::find_if(metaDevices.begin(), metaDevices.end(),
                 [=](const DeviceInformation& d)->bool{return d.deviceName == selectedDevice.deviceName;});
-            if (temp != metaDevices.end()) {
-                metaDevices.erase(temp);
+            if (temp == metaDevices.end()) {
+                IE_THROW() << "Didn't find the selected device name";
             }
+            metaDevices.erase(temp);
+            selectedDevice = {};
         }
     }
     if (selectedDevice.deviceName.empty()) {

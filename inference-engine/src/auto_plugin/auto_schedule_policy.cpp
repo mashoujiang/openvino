@@ -3,6 +3,7 @@
 //
 
 #include "auto_schedule_policy.hpp"
+#include <ie_precision.hpp>
 
 namespace AutoPlugin {
 
@@ -20,18 +21,26 @@ static void printInputAndOutputsInfo(const InferenceEngine::CNNNetwork& network)
 class AutoSchedulePolicy::Priv{
 public:
     virtual ~Priv() = default;
-    virtual DeviceInformation SelectDevice(const InferenceEngine::CNNNetwork &network, const VecDevice& metaDevices) const = 0;
+    virtual DeviceInformation SelectDevice(const InferenceEngine::CNNNetwork &network,
+                                           const VecDevice& metaDevices,
+                                           const std::vector<std::string>& optCap) const = 0;
 };
 
 class AutoStaticPolicy: public AutoSchedulePolicy::Priv{
 public:
-  DeviceInformation SelectDevice(const InferenceEngine::CNNNetwork &network, const VecDevice& metaDevices) const override;
+    DeviceInformation SelectDevice(const InferenceEngine::CNNNetwork &network,
+                                   const VecDevice& metaDevices,
+                                   const std::vector<std::string>& optCap) const override;
 
+private:
+    static std::string  GetNetworkPrecision(const InferenceEngine::CNNNetwork &network);
 private:
     mutable std::mutex _mutex;
 };
 
-DeviceInformation AutoStaticPolicy::SelectDevice(const InferenceEngine::CNNNetwork &network, const VecDevice& metaDevices) const {
+DeviceInformation AutoStaticPolicy::SelectDevice(const InferenceEngine::CNNNetwork &network,
+                                                 const VecDevice& metaDevices,
+                                                 const std::vector<std::string>& optCap) const {
     printInputAndOutputsInfo(network);
     // 1. GPU is an alias for GPU.0
     // 2. GPU.0 is always iGPU if system has iGPU
@@ -65,15 +74,61 @@ DeviceInformation AutoStaticPolicy::SelectDevice(const InferenceEngine::CNNNetwo
         }
         IE_THROW(NotImplemented) << "Auto plugin doesn't support device named " << item.deviceName;
     }
+
     if (VPUX.empty() && GPU.empty() && GNA.empty() && CPU.empty()) {
         IE_THROW(NotFound) << "No available device found";
     }
+    // dGPU is preferred
     std::sort(GPU.begin(), GPU.end(), [](DeviceInformation& a, DeviceInformation& b)->bool{return b.deviceName < a.deviceName;});
 
-    return !VPUX.empty()
-           ? VPUX[0]: (!GPU.empty()
-           ? GPU[0] : (!GNA.empty()
-           ? GNA[0] : CPU[0]));
+    // get network precision
+    auto networkPrecision = GetNetworkPrecision(network);
+
+    auto getCap = [&](std::string&& substr){
+        auto capability = std::find_if(optCap.begin(), optCap.end(),
+                                       [&](const std::string& c)->bool{ return (c.find(substr) != std::string::npos);});
+        return capability;
+    };
+
+    if (!VPUX.empty()) {
+        auto capability = getCap("VPUX");
+        if (capability != optCap.end() && capability->find(networkPrecision) != std::string::npos) {
+           return VPUX[0];
+        }
+    }
+
+    if (!GPU.empty()) {
+        auto capability = getCap("GPU");
+        if (capability != optCap.end() && capability->find(networkPrecision) != std::string::npos) {
+            return GPU[0];
+        }
+    }
+
+    if (!GNA.empty()) {
+        auto capability = getCap("GNA");
+        if (capability != optCap.end() && capability->find(networkPrecision) != std::string::npos) {
+            return GNA[0];
+        }
+    }
+
+    if (CPU.empty()) {
+        IE_THROW(NotFound) << "No available device could be used";
+    }
+    return CPU[0];
+}
+
+std::string AutoStaticPolicy::GetNetworkPrecision(const InferenceEngine::CNNNetwork &network) {
+  for (auto&& layer : network.getInputsInfo()) {
+      auto precision = layer.second->getPrecision();
+      auto name = std::string(precision.name());
+      // FIXME: presentation mismatch between device precision and network precision
+      if (name == "I8") {
+          name = "INT8";
+      }
+      // FIXME: only choose the first layer precision
+      return name;
+  }
+  return {};
 }
 
 AutoSchedulePolicy::AutoSchedulePolicy(SchedulePolicyType type) {
@@ -91,8 +146,10 @@ AutoSchedulePolicy::AutoSchedulePolicy(SchedulePolicyType type) {
 
 AutoSchedulePolicy::~AutoSchedulePolicy() = default;
 
-DeviceInformation AutoSchedulePolicy::SelectDevice(const InferenceEngine::CNNNetwork &network, const VecDevice& metaDevices) const {
-    return _priv->SelectDevice(network, metaDevices);
+DeviceInformation AutoSchedulePolicy::SelectDevice(const InferenceEngine::CNNNetwork &network,
+                                                   const VecDevice& metaDevices,
+                                                   const std::vector<std::string>& optCap) const {
+    return _priv->SelectDevice(network, metaDevices, optCap);
 }
 
 std::string AutoSchedulePolicy::StrPolicy(SchedulePolicyType type) {
