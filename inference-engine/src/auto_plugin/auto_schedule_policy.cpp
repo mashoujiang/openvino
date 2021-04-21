@@ -20,28 +20,27 @@ static void printInputAndOutputsInfo(const InferenceEngine::CNNNetwork& network)
 class AutoSchedulePolicy::Priv{
 public:
     virtual ~Priv() = default;
-    virtual VecDeviceCiter
-    SelectDevice(const InferenceEngine::CNNNetwork &network, const VecDevice& metaDevices) const = 0;
+    virtual DeviceInformation SelectDevice(const InferenceEngine::CNNNetwork &network, const VecDevice& metaDevices) const = 0;
 };
 
 class AutoStaticPolicy: public AutoSchedulePolicy::Priv{
 public:
-    VecDeviceCiter SelectDevice(const InferenceEngine::CNNNetwork &network, const VecDevice& metaDevices) const override;
+  DeviceInformation SelectDevice(const InferenceEngine::CNNNetwork &network, const VecDevice& metaDevices) const override;
 
 private:
     mutable std::mutex _mutex;
 };
 
-VecDeviceCiter AutoStaticPolicy::SelectDevice(const InferenceEngine::CNNNetwork &network, const VecDevice& metaDevices) const {
+DeviceInformation AutoStaticPolicy::SelectDevice(const InferenceEngine::CNNNetwork &network, const VecDevice& metaDevices) const {
     printInputAndOutputsInfo(network);
     // 1. GPU is an alias for GPU.0
     // 2. GPU.0 is always iGPU if system has iGPU
     // 3. GPU.X where X={1,2,3,...} is dGPU if system has both iGPU and dGPU
     // 4. GPU.0 could be dGPU if system has no iGPU
-    static VecDevice VPUX;
-    static VecDevice GPU;
-    static VecDevice GNA;
-    static VecDevice CPU;
+    VecDevice VPUX;
+    VecDevice GPU;
+    VecDevice GNA;
+    VecDevice CPU;
     std::lock_guard<std::mutex> lockGuard(_mutex);
     VPUX.clear();
     GPU.clear();
@@ -72,9 +71,9 @@ VecDeviceCiter AutoStaticPolicy::SelectDevice(const InferenceEngine::CNNNetwork 
     std::sort(GPU.begin(), GPU.end(), [](DeviceInformation& a, DeviceInformation& b)->bool{return b.deviceName < a.deviceName;});
 
     return !VPUX.empty()
-           ? VPUX.begin(): !GPU.empty()
-           ? GPU.begin() : !GNA.empty()
-           ? GNA.begin() : CPU.begin();
+           ? VPUX[0]: (!GPU.empty()
+           ? GPU[0] : (!GNA.empty()
+           ? GNA[0] : CPU[0]));
 }
 
 AutoSchedulePolicy::AutoSchedulePolicy(SchedulePolicyType type) {
@@ -92,7 +91,7 @@ AutoSchedulePolicy::AutoSchedulePolicy(SchedulePolicyType type) {
 
 AutoSchedulePolicy::~AutoSchedulePolicy() = default;
 
-VecDeviceCiter AutoSchedulePolicy::SelectDevice(const InferenceEngine::CNNNetwork &network, const VecDevice& metaDevices) const {
+DeviceInformation AutoSchedulePolicy::SelectDevice(const InferenceEngine::CNNNetwork &network, const VecDevice& metaDevices) const {
     return _priv->SelectDevice(network, metaDevices);
 }
 

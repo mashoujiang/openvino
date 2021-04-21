@@ -26,7 +26,7 @@ public:
     explicit AutoSchedulePolicy(SchedulePolicyType type);
     ~AutoSchedulePolicy();
 
-    VecDeviceCiter SelectDevice(const InferenceEngine::CNNNetwork &network, const VecDevice& metaDevices) const;
+    DeviceInformation SelectDevice(const InferenceEngine::CNNNetwork &network, const VecDevice& metaDevices) const;
 
     class Priv;
 
