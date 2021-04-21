@@ -74,22 +74,9 @@ std::vector<DeviceInformation> AutoInferencePlugin::ParseMetaDevices(const std::
     };
 
     for (auto && d : devicesWithRequests) {
-        auto openingBracket = d.find_first_of('(');
-        auto closingBracket = d.find_first_of(')', openingBracket);
-        auto deviceName = d.substr(0, openingBracket);
-
         int numRequests = -1;
-        if (closingBracket != std::string::npos && openingBracket < closingBracket) {
-            numRequests = std::stol(d.substr(openingBracket + 1, closingBracket - 1));
-
-            if (numRequests <= 0) {
-                IE_THROW() << "Priority value for '" << deviceName << "' must be > 0, while " << numRequests
-                    << "is passed";
-            }
-        }
-
         // create meta device
-        metaDevices.push_back({ deviceName, getDeviceConfig(deviceName), numRequests });
+        metaDevices.push_back({ d, getDeviceConfig(d), numRequests });
     }
 
     return metaDevices;
