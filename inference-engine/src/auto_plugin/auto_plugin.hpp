@@ -47,7 +47,6 @@ protected:
                                                           const AutoPlugin::DeviceName & deviceName) const;
 
 private:
-    mutable std::unordered_set<std::string> _supportedDevices;
     std::unordered_map<SchedulePolicyType, AutoSchedulePolicy::Ptr> _policies;
 };
 
