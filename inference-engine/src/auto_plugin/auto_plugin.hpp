@@ -24,23 +24,23 @@ public:
 
     InferenceEngine::ExecutableNetworkInternal::Ptr LoadExeNetworkImpl(const InferenceEngine::CNNNetwork&        network,
                                                                        const std::map<std::string, std::string>& config) override;
+    InferenceEngine::QueryNetworkResult QueryNetwork(const InferenceEngine::CNNNetwork&        network,
+                                                     const std::map<std::string, std::string>& config) const override;
 
     void SetConfig(const std::map<std::string, std::string>& config) override;
     InferenceEngine::Parameter GetConfig(const std::string& name, const std::map<std::string, InferenceEngine::Parameter> & options) const override;
-    InferenceEngine::QueryNetworkResult QueryNetwork(const InferenceEngine::CNNNetwork&        network,
-                                                     const std::map<std::string, std::string>& config) const override;
+
     InferenceEngine::Parameter GetMetric(const std::string& name,
                                          const std::map<std::string, InferenceEngine::Parameter>& options) const override;
-
-    std::vector<AutoPlugin::DeviceInformation> ParseMetaDevices(const std::string & devicesRequestsCfg,
-                                                                const std::map<std::string, std::string> & config) const;
 
 private:
     static std::string GetPriorityDevices();
     static SchedulePolicyType ParseScheduleType(const std::string & scheduleType);
 
-    std::vector<std::string> GetOptimizationCapabilities() const;
     void RegisterPolicy(SchedulePolicyType type);
+    std::vector<std::string> GetOptimizationCapabilities() const;
+    std::vector<AutoPlugin::DeviceInformation> ParseMetaDevices(const std::string & devicesRequestsCfg,
+                                                                const std::map<std::string, std::string> & config) const;
 
 protected:
     std::map<std::string, std::string> GetSupportedConfig(const std::map<std::string, std::string>& config,

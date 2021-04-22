@@ -14,9 +14,9 @@ namespace AutoPlugin {
     using namespace InferenceEngine;
 
 AutoAsyncInferRequest::AutoAsyncInferRequest(
-    const AutoInferRequest::Ptr&         inferRequest,
+    const AutoInferRequest::Ptr&                inferRequest,
     const bool                                  needPerfCounters,
-    const AutoExecutableNetwork::Ptr&    autoExecutableNetwork,
+    const AutoExecutableNetwork::Ptr&           autoExecutableNetwork,
     const ITaskExecutor::Ptr&                   callbackExecutor) :
     AsyncInferRequestThreadSafeDefault(inferRequest, nullptr, callbackExecutor),
     _autoExecutableNetwork{autoExecutableNetwork},
