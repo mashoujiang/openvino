@@ -51,10 +51,6 @@ DeviceInformation AutoStaticPolicy::SelectDevice(const InferenceEngine::CNNNetwo
     VecDevice GNA;
     VecDevice CPU;
     std::lock_guard<std::mutex> lockGuard(_mutex);
-    VPUX.clear();
-    GPU.clear();
-    GNA.clear();
-    CPU.clear();
     for (auto& item : metaDevices) {
         if (item.deviceName.find("VPUX") == 0) {
             VPUX.push_back(item);
