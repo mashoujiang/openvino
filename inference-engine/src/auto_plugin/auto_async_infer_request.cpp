@@ -48,9 +48,9 @@ AutoAsyncInferRequest::AutoAsyncInferRequest(
                       std::rethrow_exception(InferenceEngine::CurrentException());
                   else
                       IE_EXCEPTION_SWITCH(status, ExceptionType,
-                        InferenceEngine::details::ThrowNow<ExceptionType>{}
-                            <<= std::stringstream{} << IE_LOCATION
-                            <<  InferenceEngine::details::ExceptionTraits<ExceptionType>::string());
+                          InferenceEngine::details::ThrowNow<ExceptionType>{}
+                              <<= std::stringstream{} << IE_LOCATION
+                              <<  InferenceEngine::details::ExceptionTraits<ExceptionType>::string());
               }
               if (_needPerfCounters)
                   _perfMap = _workerInferRequest->_inferRequest.GetPerformanceCounts();

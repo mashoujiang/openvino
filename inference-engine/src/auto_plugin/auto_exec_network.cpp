@@ -63,12 +63,8 @@ AutoExecutableNetwork::AutoExecutableNetwork(const InferenceEngine::ExecutableNe
     try {
         optimalNum = _network.GetMetric(METRIC_KEY(OPTIMAL_NUMBER_OF_INFER_REQUESTS)).as<unsigned int>();
     } catch (const InferenceEngine::Exception &iie) {
-        IE_THROW()
-                << "Every device used with the Auto-Device should "
-                << "support OPTIMAL_NUMBER_OF_INFER_REQUESTS ExecutableNetwork metric. "
-                << "Failed to query the metric for the " << deviceName << " with error:" << iie.what();
     }
-    const auto numRequests = _deviceInfo.numRequests == -1 ? optimalNum : _deviceInfo.numRequests;
+    const auto numRequests = _deviceInfo.numRequests == -1 ? (optimalNum == 0 ? 1: optimalNum) : _deviceInfo.numRequests;
     _workerRequests.resize(numRequests);
     auto* idleWorkerRequestsPtr = &(_idleWorkerRequests);
     _idleWorkerRequests.set_capacity(numRequests);
@@ -142,8 +138,6 @@ InferenceEngine::InferRequestInternal::Ptr AutoExecutableNetwork::CreateInferReq
     auto& dev_requests = _workerRequests;
     if (num < dev_requests.size()) {
         request_to_share_blobs_with = dev_requests.at(num)._inferRequest;
-    } else {
-        IE_THROW(NotAllocated) << "The infer request number reach the limitation, which is " << dev_requests.size() << std::endl;
     }
 
     return std::make_shared<AutoInferRequest>(networkInputs, networkOutputs, request_to_share_blobs_with);
