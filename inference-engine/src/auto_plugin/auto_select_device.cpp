@@ -2,7 +2,7 @@
 // SPDX-License-Identifier: Apache-2.0
 //
 
-#include "auto_schedule_policy.hpp"
+#include "auto_select_device.hpp"
 #include <ie_precision.hpp>
 
 namespace AutoPlugin {
@@ -18,7 +18,7 @@ static void printInputAndOutputsInfo(const InferenceEngine::CNNNetwork& network)
     }
 }
 
-class AutoSchedulePolicy::Priv{
+class AutoSelectDevice::Priv{
 public:
     virtual ~Priv() = default;
     virtual DeviceInformation SelectDevice(const InferenceEngine::CNNNetwork &network,
@@ -26,7 +26,7 @@ public:
                                            const std::vector<std::string>& optCap) const = 0;
 };
 
-class AutoStaticPolicy: public AutoSchedulePolicy::Priv{
+class AutoStaticPolicy: public AutoSelectDevice::Priv{
 public:
     DeviceInformation SelectDevice(const InferenceEngine::CNNNetwork &network,
                                    const VecDevice& metaDevices,
@@ -127,30 +127,30 @@ std::string AutoStaticPolicy::GetNetworkPrecision(const InferenceEngine::CNNNetw
   return {};
 }
 
-AutoSchedulePolicy::AutoSchedulePolicy(SchedulePolicyType type) {
+AutoSelectDevice::AutoSelectDevice(SelectDevicePolicy type) {
     switch (type) {
-        case SchedulePolicyType::STATIC: {
+        case SelectDevicePolicy::STATIC: {
             _priv.reset(new AutoStaticPolicy());
             break;
         }
         default: {
             IE_THROW(NotImplemented)
-                << "Does not implement schedule type " << StrPolicy(type);
+                << "Does not implement select device policy with type " << StrPolicy(type);
         }
     }
 }
 
-AutoSchedulePolicy::~AutoSchedulePolicy() = default;
+AutoSelectDevice::~AutoSelectDevice() = default;
 
-DeviceInformation AutoSchedulePolicy::SelectDevice(const InferenceEngine::CNNNetwork &network,
+DeviceInformation AutoSelectDevice::SelectDevice(const InferenceEngine::CNNNetwork &network,
                                                    const VecDevice& metaDevices,
                                                    const std::vector<std::string>& optCap) const {
     return _priv->SelectDevice(network, metaDevices, optCap);
 }
 
-std::string AutoSchedulePolicy::StrPolicy(SchedulePolicyType type) {
+std::string AutoSelectDevice::StrPolicy(SelectDevicePolicy type) {
     switch (type) {
-    case SchedulePolicyType::STATIC:
+    case SelectDevicePolicy::STATIC:
         return "STATIC";
     default:
         return "UNSUPPORT";

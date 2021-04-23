@@ -3,7 +3,7 @@
 //
 
 /**
- * @brief Auto plugin schedule policy base definition
+ * @brief Auto plugin select device base definition
  */
 
 #pragma once
@@ -16,15 +16,15 @@ namespace AutoPlugin {
 using VecDevice = std::vector<DeviceInformation>;
 using VecDeviceCiter = std::vector<DeviceInformation>::const_iterator;
 
-enum class SchedulePolicyType {
+enum class SelectDevicePolicy {
     STATIC        = 0
 };
 
-class AutoSchedulePolicy{
+class AutoSelectDevice{
 public:
-    using Ptr = std::unique_ptr<AutoSchedulePolicy>;
-    explicit AutoSchedulePolicy(SchedulePolicyType type);
-    ~AutoSchedulePolicy();
+    using Ptr = std::unique_ptr<AutoSelectDevice>;
+    explicit AutoSelectDevice(SelectDevicePolicy type);
+    ~AutoSelectDevice();
 
     DeviceInformation SelectDevice(const InferenceEngine::CNNNetwork &network,
                                    const VecDevice& metaDevices,
@@ -33,7 +33,7 @@ public:
     class Priv;
 
 private:
-    static std::string StrPolicy(SchedulePolicyType type);
+    static std::string StrPolicy(SelectDevicePolicy type);
 
 private:
     std::unique_ptr<Priv> _priv;
