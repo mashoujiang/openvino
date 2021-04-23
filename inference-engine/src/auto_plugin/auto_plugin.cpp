@@ -32,7 +32,7 @@ namespace {
 
 AutoInferencePlugin::AutoInferencePlugin() {
     _pluginName = "AUTO";
-    RegisterPolicy(SchedulePolicyType::STATIC);
+    RegisterPolicy(SelectDevicePolicy::STATIC);
 }
 
 ExecutableNetworkInternal::Ptr AutoInferencePlugin::LoadExeNetworkImpl(const CNNNetwork &network,
@@ -231,16 +231,16 @@ std::string AutoInferencePlugin::GetPriorityDevices() {
     return allDevices;
 }
 
-SchedulePolicyType AutoInferencePlugin::ParseScheduleType(const std::string & scheduleType) {
+SelectDevicePolicy AutoInferencePlugin::ParseScheduleType(const std::string & scheduleType) {
     if (scheduleType == "STATIC" || scheduleType.empty()) {
-        return SchedulePolicyType::STATIC;
+        return SelectDevicePolicy::STATIC;
     }
     IE_THROW(NotImplemented) << "Auto plugin doesn't implement schedule method with type " << scheduleType;
 }
 
 //////////////////////////////////// private & protected functions ///////////////////
-void AutoInferencePlugin::RegisterPolicy(SchedulePolicyType type) {
-    _policies.emplace(type, new AutoSchedulePolicy(type));
+void AutoInferencePlugin::RegisterPolicy(SelectDevicePolicy type) {
+    _policies.emplace(type, new AutoSelectDevice(type));
 }
 
 std::vector<std::string> AutoInferencePlugin::GetOptimizationCapabilities() const {

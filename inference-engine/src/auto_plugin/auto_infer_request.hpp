@@ -23,8 +23,8 @@ class AutoInferRequest : public InferenceEngine::InferRequestInternal {
 public:
     using Ptr = std::shared_ptr<AutoInferRequest>;
     explicit AutoInferRequest(const InferenceEngine::InputsDataMap&  networkInputs,
-                                     const InferenceEngine::OutputsDataMap& networkOutputs,
-                                     InferenceEngine::InferRequest request_to_share_blobs_with);
+                              const InferenceEngine::OutputsDataMap& networkOutputs,
+                              InferenceEngine::InferRequest request_to_share_blobs_with);
     std::map<std::string, InferenceEngine::InferenceEngineProfileInfo> GetPerformanceCounts() const override;
     void InferImpl() override;
     // Auto-Device impl specific: sets the data (blobs from the device-less requests to the specific device request)
