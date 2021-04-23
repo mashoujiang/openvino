@@ -32,6 +32,7 @@ AutoAsyncInferRequest::AutoAsyncInferRequest(
         };
         AutoAsyncInferRequest* _this = nullptr;
     };
+    // TODO: will simplify the below code logic
     _pipeline = {
         // as the scheduling algo may select any device, this stage accepts the scheduling decision (actual workerRequest)
         // then sets the device-agnostic blobs to the actual (device-specific) request

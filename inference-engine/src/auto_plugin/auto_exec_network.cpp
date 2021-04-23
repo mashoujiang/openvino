@@ -46,6 +46,7 @@ struct IdleGuard {
     AutoExecutableNetwork::NotBusyWorkerRequests*  _notBusyWorkerRequests = nullptr;
 };
 
+// TODO: will simplify the executable network logic
 AutoExecutableNetwork::AutoExecutableNetwork(const InferenceEngine::ExecutableNetwork&                                          network,
                                                            const DeviceInformation&                                             deviceInfo,
                                                            const std::unordered_map<std::string, InferenceEngine::Parameter>&   config,
@@ -130,6 +131,7 @@ RemoteContext::Ptr AutoExecutableNetwork::GetContext() const {
     }
 }
 
+// TODO: will simplify the CreateInferRequestImpl logic
 InferenceEngine::InferRequestInternal::Ptr AutoExecutableNetwork::CreateInferRequestImpl(InferenceEngine::InputsDataMap networkInputs,
                                                                                          InferenceEngine::OutputsDataMap networkOutputs) {
     auto num = _numRequestsCreated++;
@@ -143,6 +145,7 @@ InferenceEngine::InferRequestInternal::Ptr AutoExecutableNetwork::CreateInferReq
     return std::make_shared<AutoInferRequest>(networkInputs, networkOutputs, request_to_share_blobs_with);
 }
 
+// TODO: will simplify the CreateInferRequest logic
 IInferRequest::Ptr AutoExecutableNetwork::CreateInferRequest() {
     IInferRequest::Ptr asyncRequest;
     auto syncRequestImpl = CreateInferRequestImpl(_networkInputs, _networkOutputs);
