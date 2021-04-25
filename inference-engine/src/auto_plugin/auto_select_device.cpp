@@ -41,6 +41,7 @@ private:
 DeviceInformation AutoStaticPolicy::SelectDevice(const InferenceEngine::CNNNetwork &network,
                                                  const VecDevice& metaDevices,
                                                  const std::vector<std::string>& optCap) const {
+    std::cout << " ------- ZT_DEBUG,  AutoStaticPolicy::SelectDevice" << "\n";
     printInputAndOutputsInfo(network);
     // 1. GPU is an alias for GPU.0
     // 2. GPU.0 is always iGPU if system has iGPU
@@ -77,34 +78,17 @@ DeviceInformation AutoStaticPolicy::SelectDevice(const InferenceEngine::CNNNetwo
     // dGPU is preferred
     std::sort(GPU.begin(), GPU.end(), [](DeviceInformation& a, DeviceInformation& b)->bool{return b.deviceName < a.deviceName;});
 
-    // get network precision
-    auto networkPrecision = GetNetworkPrecision(network);
-
-    auto getCap = [&](std::string&& substr){
-        auto capability = std::find_if(optCap.begin(), optCap.end(),
-                                       [&](const std::string& c)->bool{ return (c.find(substr) != std::string::npos);});
-        return capability;
-    };
-
     if (!VPUX.empty()) {
-        auto capability = getCap("VPUX");
-        if (capability != optCap.end() && capability->find(networkPrecision) != std::string::npos) {
-           return VPUX[0];
-        }
+        return VPUX[0];
     }
 
     if (!GPU.empty()) {
-        auto capability = getCap("GPU");
-        if (capability != optCap.end() && capability->find(networkPrecision) != std::string::npos) {
-            return GPU[0];
-        }
+        std::cout << " ------- ZT_DEBUG,  AutoStaticPolicy::SelectDevice, Select GPU 1" << "\n";
+        return GPU[0];
     }
 
     if (!GNA.empty()) {
-        auto capability = getCap("GNA");
-        if (capability != optCap.end() && capability->find(networkPrecision) != std::string::npos) {
-            return GNA[0];
-        }
+        return GNA[0];
     }
 
     if (CPU.empty()) {
