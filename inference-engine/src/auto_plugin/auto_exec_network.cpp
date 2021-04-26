@@ -65,7 +65,7 @@ AutoExecutableNetwork::AutoExecutableNetwork(const InferenceEngine::ExecutableNe
         optimalNum = _network.GetMetric(METRIC_KEY(OPTIMAL_NUMBER_OF_INFER_REQUESTS)).as<unsigned int>();
     } catch (const InferenceEngine::Exception &iie) {
     }
-    const auto numRequests = _deviceInfo.numRequests == -1 ? (optimalNum == 0 ? 1: optimalNum) : _deviceInfo.numRequests;
+    const auto numRequests = optimalNum == 0 ? 1: optimalNum;
     _workerRequests.resize(numRequests);
     auto* idleWorkerRequestsPtr = &(_idleWorkerRequests);
     _idleWorkerRequests.set_capacity(numRequests);
@@ -196,7 +196,7 @@ InferenceEngine::Parameter AutoExecutableNetwork::GetMetric(const std::string &n
             METRIC_KEY(SUPPORTED_CONFIG_KEYS)
         });
     } else if (name == METRIC_KEY(SUPPORTED_CONFIG_KEYS)) {
-        std::vector<std::string> configKeys = { AutoConfigParams::KEY_AUTO_DEVICE_PRIORITIES };
+        std::vector<std::string> configKeys = { AutoConfigParams::KEY_AUTO_DEVICE_CHOICE };
         IE_SET_METRIC_RETURN(SUPPORTED_CONFIG_KEYS, configKeys);
     } else {
         IE_THROW() << "Unsupported Network metric: " << name;

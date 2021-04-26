@@ -55,11 +55,11 @@ Parsed<T> parseDeviceNameIntoConfig(const std::string& deviceName, const std::ma
     } else if (deviceName_.find("AUTO") == 0) {
         deviceName_ = "AUTO";
         if (deviceName.size() > std::string("AUTO").size()) {
-            std::string priorityDevice = deviceName.substr(std::string("AUTO:").size());
-            if (priorityDevice.find("AUTO") != std::string::npos) {
-                IE_THROW() << "Priority device should not be AUTO";
+            std::string deviceChoice = deviceName.substr(std::string("AUTO:").size());
+            if (deviceChoice.find("AUTO") != std::string::npos) {
+                IE_THROW() << "Device choice for AUTO should not be AUTO";
             }
-            config_[InferenceEngine::AutoConfigParams::KEY_AUTO_DEVICE_PRIORITIES] = deviceName.substr(std::string("AUTO:").size());
+            config_[InferenceEngine::AutoConfigParams::KEY_AUTO_DEVICE_CHOICE] = deviceName.substr(std::string("AUTO:").size());
         }
     } else {
         if (deviceName_ == "") {

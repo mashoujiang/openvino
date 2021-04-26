@@ -41,7 +41,6 @@ private:
 DeviceInformation AutoStaticPolicy::SelectDevice(const InferenceEngine::CNNNetwork &network,
                                                  const VecDevice& metaDevices,
                                                  const std::vector<std::string>& optCap) const {
-    std::cout << " ------- ZT_DEBUG,  AutoStaticPolicy::SelectDevice" << "\n";
     printInputAndOutputsInfo(network);
     // 1. GPU is an alias for GPU.0
     // 2. GPU.0 is always iGPU if system has iGPU
@@ -83,7 +82,6 @@ DeviceInformation AutoStaticPolicy::SelectDevice(const InferenceEngine::CNNNetwo
     }
 
     if (!GPU.empty()) {
-        std::cout << " ------- ZT_DEBUG,  AutoStaticPolicy::SelectDevice, Select GPU 1" << "\n";
         return GPU[0];
     }
 
