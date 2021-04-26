@@ -210,15 +210,8 @@ InferenceEngine::Parameter AutoInferencePlugin::GetMetric(const std::string& nam
     }
 }
 
-std::string AutoInferencePlugin::GetDeviceChoice() {
-    // TODO: should delete this WA after thirdparty support query devices.
-    Core ie;
-    auto availableDevices = ie.GetAvailableDevices();
-
-    if (availableDevices.empty()) {
-        IE_THROW() << "No available devices";
-    }
-
+std::string AutoInferencePlugin::GetDeviceChoice() const {
+    std::vector<std::string> availableDevices = GetCore()->GetAvailableDevices();
     std::string allDevices;
     for (auto && device : availableDevices) {
         if (device == "AUTO") {
