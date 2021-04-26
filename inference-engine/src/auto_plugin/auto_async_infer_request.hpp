@@ -27,7 +27,7 @@ public:
                                           const InferenceEngine::ITaskExecutor::Ptr&    callbackExecutor);
     void Infer_ThreadUnsafe() override;
     std::map<std::string, InferenceEngine::InferenceEngineProfileInfo> GetPerformanceCounts() const override;
-    ~AutoAsyncInferRequest() override;
+    ~AutoAsyncInferRequest();
 
 protected:
     AutoExecutableNetwork::Ptr                                   _autoExecutableNetwork;

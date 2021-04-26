@@ -132,7 +132,7 @@ RemoteContext::Ptr AutoExecutableNetwork::GetContext() const {
 }
 
 // TODO: will simplify the CreateInferRequestImpl logic
-InferenceEngine::InferRequestInternal::Ptr AutoExecutableNetwork::CreateInferRequestImpl(InferenceEngine::InputsDataMap networkInputs,
+InferenceEngine::IInferRequestInternal::Ptr AutoExecutableNetwork::CreateInferRequestImpl(InferenceEngine::InputsDataMap networkInputs,
                                                                                          InferenceEngine::OutputsDataMap networkOutputs) {
     auto num = _numRequestsCreated++;
     InferenceEngine::InferRequest request_to_share_blobs_with;
@@ -146,17 +146,14 @@ InferenceEngine::InferRequestInternal::Ptr AutoExecutableNetwork::CreateInferReq
 }
 
 // TODO: will simplify the CreateInferRequest logic
-IInferRequest::Ptr AutoExecutableNetwork::CreateInferRequest() {
-    IInferRequest::Ptr asyncRequest;
+IInferRequestInternal::Ptr AutoExecutableNetwork::CreateInferRequest() {
+  IInferRequestInternal::Ptr asyncRequest;
     auto syncRequestImpl = CreateInferRequestImpl(_networkInputs, _networkOutputs);
     syncRequestImpl->setPointerToExecutableNetworkInternal(shared_from_this());
-    auto asyncTreadSafeImpl = std::make_shared<AutoAsyncInferRequest>(std::static_pointer_cast<AutoInferRequest>(syncRequestImpl),
-                                                                             _needPerfCounters,
-                                                                             std::static_pointer_cast<AutoExecutableNetwork>(shared_from_this()),
-                                                                             _callbackExecutor);
-    asyncRequest.reset(new InferRequestBase(asyncTreadSafeImpl));
-    asyncTreadSafeImpl->SetPointerToPublicInterface(asyncRequest);
-    return asyncRequest;
+    return std::make_shared<AutoAsyncInferRequest>(std::static_pointer_cast<AutoInferRequest>(syncRequestImpl),
+                                                  _needPerfCounters,
+                                                  std::static_pointer_cast<AutoExecutableNetwork>(shared_from_this()),
+                                                  _callbackExecutor);
 }
 
 void AutoExecutableNetwork::SetConfig(const std::map<std::string, InferenceEngine::Parameter> &config) {

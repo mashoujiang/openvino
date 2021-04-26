@@ -15,6 +15,8 @@
 #include <auto_plugin/auto_config.hpp>
 #include <ie_core.hpp>
 #include <threading/ie_executor_manager.hpp>
+#include <ie_algorithm.hpp>
+
 #include "auto_plugin.hpp"
 
 // ------------------------------AutoInferencePlugin----------------------------
@@ -120,8 +122,8 @@ QueryNetworkResult AutoInferencePlugin::QueryNetwork(const CNNNetwork&          
     queryResult.supportedLayersMap.clear();
 
     auto fullConfig = mergeConfigs(_config, config);
-    auto deviceChoice = fullConfig.find(AutoConfigParams::KEY_AUTO_DEVICE_CHOICE);
-    if (deviceChoice == fullConfig.end()) {
+    auto deviceChoiceItr = fullConfig.find(AutoConfigParams::KEY_AUTO_DEVICE_CHOICE);
+    if (deviceChoiceItr == fullConfig.end()) {
         auto deviceChoice = GetDeviceChoice();
         fullConfig.emplace(AutoConfigParams::KEY_AUTO_DEVICE_CHOICE, deviceChoice);
     }
