@@ -30,9 +30,9 @@ namespace AutoConfigParams {
 #define DECLARE_AUTO_CONFIG_VALUE(name) DECLARE_CONFIG_VALUE(AUTO_##name)
 
 /**
- * @brief Device Priorities config option, with comma-separated devices listed in the desired priority
+ * @brief Limit device choice config option, with comma-separated devices listed
  */
-DECLARE_AUTO_CONFIG_KEY(DEVICE_PRIORITIES);
+DECLARE_AUTO_CONFIG_KEY(DEVICE_CHOICE);
 
 /**
  * @brief Schedule type config option, usage like: ie.SetConfig({{"AUTO_SCHEDULE_TYPE", "STATIC"}}, device_name);

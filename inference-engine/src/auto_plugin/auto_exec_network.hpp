@@ -28,7 +28,6 @@ using DeviceName = std::string;
 struct DeviceInformation {
     DeviceName deviceName;
     std::map<std::string, std::string> config;
-    int numRequests;
 };
 
 #if ((IE_THREAD == IE_THREAD_TBB) || (IE_THREAD == IE_THREAD_TBB_AUTO))

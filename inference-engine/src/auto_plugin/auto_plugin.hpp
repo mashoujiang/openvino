@@ -34,7 +34,7 @@ public:
                                          const std::map<std::string, InferenceEngine::Parameter>& options) const override;
 
 private:
-    static std::string GetPriorityDevices();
+    static std::string GetDeviceChoice();
     static SelectDevicePolicy ParseScheduleType(const std::string & scheduleType);
 
     void RegisterPolicy(SelectDevicePolicy type);

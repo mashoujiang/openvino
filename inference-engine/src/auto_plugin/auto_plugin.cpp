@@ -46,16 +46,16 @@ ExecutableNetworkInternal::Ptr AutoInferencePlugin::LoadExeNetworkImpl(const CNN
     }
 
     auto fullConfig = mergeConfigs(_config, config);
-    auto priorities = fullConfig.find(AutoConfigParams::KEY_AUTO_DEVICE_PRIORITIES);
-    if (priorities == fullConfig.end()) {
-        auto priorityDevices = GetPriorityDevices();
-        fullConfig.emplace(AutoConfigParams::KEY_AUTO_DEVICE_PRIORITIES, priorityDevices);
+    auto deviceChoiceConfig = fullConfig.find(AutoConfigParams::KEY_AUTO_DEVICE_CHOICE);
+    if (deviceChoiceConfig == fullConfig.end()) {
+        auto deviceChoice = GetDeviceChoice();
+        fullConfig.emplace(AutoConfigParams::KEY_AUTO_DEVICE_CHOICE, deviceChoice);
     }
-    auto metaDevices = ParseMetaDevices(fullConfig[AutoConfigParams::KEY_AUTO_DEVICE_PRIORITIES], fullConfig);
+    auto metaDevices = ParseMetaDevices(fullConfig[AutoConfigParams::KEY_AUTO_DEVICE_CHOICE], fullConfig);
 
     // collect the settings that are applicable to the devices we are loading the network to
     std::unordered_map<std::string, InferenceEngine::Parameter> autoNetworkConfig;
-    autoNetworkConfig.insert(*fullConfig.find(AutoConfigParams::KEY_AUTO_DEVICE_PRIORITIES));
+    autoNetworkConfig.insert(*fullConfig.find(AutoConfigParams::KEY_AUTO_DEVICE_CHOICE));
 
     auto scheduleType = ParseScheduleType(fullConfig[AutoConfigParams::KEY_AUTO_SCHEDULE_TYPE]);
     auto optCap = GetOptimizationCapabilities();
@@ -108,7 +108,6 @@ ExecutableNetworkInternal::Ptr AutoInferencePlugin::LoadExeNetworkImpl(const CNN
 QueryNetworkResult AutoInferencePlugin::QueryNetwork(const CNNNetwork&                         network,
                                                             const std::map<std::string, std::string>& config) const {
     QueryNetworkResult queryResult;
-
     if (GetCore() == nullptr) {
         IE_THROW() << "Please, work with AUTO device via InferencEngine::Core object";
     }
@@ -121,12 +120,12 @@ QueryNetworkResult AutoInferencePlugin::QueryNetwork(const CNNNetwork&          
     queryResult.supportedLayersMap.clear();
 
     auto fullConfig = mergeConfigs(_config, config);
-    auto priorities = fullConfig.find(AutoConfigParams::KEY_AUTO_DEVICE_PRIORITIES);
-    if (priorities == fullConfig.end()) {
-        auto priorityDevices = GetPriorityDevices();
-        fullConfig.emplace(AutoConfigParams::KEY_AUTO_DEVICE_PRIORITIES, priorityDevices);
+    auto deviceChoice = fullConfig.find(AutoConfigParams::KEY_AUTO_DEVICE_CHOICE);
+    if (deviceChoice == fullConfig.end()) {
+        auto deviceChoice = GetDeviceChoice();
+        fullConfig.emplace(AutoConfigParams::KEY_AUTO_DEVICE_CHOICE, deviceChoice);
     }
-    auto metaDevices = ParseMetaDevices(fullConfig[AutoConfigParams::KEY_AUTO_DEVICE_PRIORITIES], fullConfig);
+    auto metaDevices = ParseMetaDevices(fullConfig[AutoConfigParams::KEY_AUTO_DEVICE_CHOICE], fullConfig);
     std::unordered_set<std::string> supportedLayers;
     std::unordered_set<std::string> supportedDevices;
     for (auto&& value : metaDevices) {
@@ -197,7 +196,7 @@ InferenceEngine::Parameter AutoInferencePlugin::GetMetric(const std::string& nam
         IE_SET_METRIC_RETURN(FULL_DEVICE_NAME, device_name);
     } else if (name == METRIC_KEY(SUPPORTED_CONFIG_KEYS)) {
         std::vector<std::string> configKeys = {
-                AutoConfigParams::KEY_AUTO_DEVICE_PRIORITIES,
+                // AutoConfigParams::KEY_AUTO_DEVICE_CHOICE,
                 AutoConfigParams::KEY_AUTO_SCHEDULE_TYPE
         };
         IE_SET_METRIC_RETURN(SUPPORTED_CONFIG_KEYS, configKeys);
@@ -209,7 +208,7 @@ InferenceEngine::Parameter AutoInferencePlugin::GetMetric(const std::string& nam
     }
 }
 
-std::string AutoInferencePlugin::GetPriorityDevices() {
+std::string AutoInferencePlugin::GetDeviceChoice() {
     // TODO: should delete this WA after thirdparty support query devices.
     Core ie;
     auto availableDevices = ie.GetAvailableDevices();
@@ -275,21 +274,20 @@ std::map<std::string, std::string> AutoInferencePlugin::GetSupportedConfig(
     return supportedConfig;
 }
 
-std::vector<DeviceInformation> AutoInferencePlugin::ParseMetaDevices(const std::string& priorities,
+std::vector<DeviceInformation> AutoInferencePlugin::ParseMetaDevices(const std::string& deviceChoice,
                                                                      const std::map<std::string, std::string> & config) const {
     std::vector<DeviceInformation> metaDevices;
-
     // parsing the string and splitting to tokens
     std::vector<std::string> devicesWithRequests;
     // parsing the string and splitting the comma-separated tokens
     std::string::size_type i = 0;
     std::string::size_type idelimeter;
-    while ((idelimeter = priorities.find(',', i)) != std::string::npos) {
-        devicesWithRequests.push_back(priorities.substr(i, idelimeter - i));
+    while ((idelimeter = deviceChoice.find(',', i)) != std::string::npos) {
+        devicesWithRequests.push_back(deviceChoice.substr(i, idelimeter - i));
         i = idelimeter + 1;
     }
     // last token in the string (which has no comma after that)
-    devicesWithRequests.push_back(priorities.substr(i, priorities.length() - i));
+    devicesWithRequests.push_back(deviceChoice.substr(i, deviceChoice.length() - i));
 
     auto getDeviceConfig = [&] (const DeviceName & deviceWithID) {
         DeviceIDParser deviceParser(deviceWithID);
@@ -306,9 +304,8 @@ std::vector<DeviceInformation> AutoInferencePlugin::ParseMetaDevices(const std::
     };
 
     for (auto && d : devicesWithRequests) {
-        int numRequests = -1;
         // create meta device
-        metaDevices.push_back({ d, getDeviceConfig(d), numRequests });
+        metaDevices.push_back({ d, getDeviceConfig(d)});
     }
 
     return metaDevices;
