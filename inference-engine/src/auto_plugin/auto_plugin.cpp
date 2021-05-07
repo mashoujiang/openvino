@@ -116,13 +116,26 @@ IE::ExecutableNetworkInternal::Ptr AutoInferencePlugin::LoadExeNetworkImpl(const
     auto fullConfig = mergeConfigs(_config, config);
     auto metaDevices = GetDeviceChoice(fullConfig);
     auto optCap = GetOptimizationCapabilities();
-
-    DeviceInformation selectedDevice = SelectDevice(network, metaDevices, optCap);
     IE::ExecutableNetwork executableNetwork;
-    try {
-        executableNetwork = GetCore()->LoadNetwork(network, selectedDevice.deviceName, selectedDevice.config);
-    } catch(const IE::Exception &iie) {
-        IE_THROW() << "Failed to load network to device named " << selectedDevice.deviceName;
+    DeviceInformation selectedDevice {};
+
+    while (!metaDevices.empty()) {
+        selectedDevice = SelectDevice(network, metaDevices, optCap);
+        try {
+            executableNetwork = GetCore()->LoadNetwork(network, selectedDevice.deviceName, selectedDevice.config);
+            break;
+        } catch(const InferenceEngine::Exception &iie) {
+            auto eraseDevice = std::find_if(metaDevices.begin(), metaDevices.end(),
+                [=](const DeviceInformation& d)->bool{return d.deviceName == selectedDevice.deviceName;});
+            if (eraseDevice == metaDevices.end()) {
+                IE_THROW() << "Didn't find the selected device name";
+            }
+            metaDevices.erase(eraseDevice);
+            selectedDevice = {};
+        }
+    }
+    if (selectedDevice.deviceName.empty()) {
+        IE_THROW(NotFound) << "Failed to load network to any device";
     }
 
     bool enablePerfCounters = false;
@@ -242,7 +255,7 @@ std::vector<AutoPlugin::DeviceInformation> AutoInferencePlugin::GetDeviceChoice(
             tconfig[IE::PluginConfigParams::KEY_DEVICE_ID] = deviceIDLocal;
         }
 
-            return GetSupportedConfig(tconfig, deviceName);
+        return GetSupportedConfig(tconfig, deviceName);
     };
 
     for (auto && d : availableDevices) {
