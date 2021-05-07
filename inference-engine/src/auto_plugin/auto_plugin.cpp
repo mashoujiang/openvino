@@ -24,18 +24,120 @@ namespace {
         return config;
     }
 
-    DeviceInformation SelectDevice(const std::vector<DeviceInformation>& metaDevices) {
+    std::string GetNetworkPrecision(const InferenceEngine::CNNNetwork &network) {
+        for (auto&& layer : network.getInputsInfo()) {
+            auto precision = layer.second->getPrecision();
+            auto name = std::string(precision.name());
+            if (name == "I8") {
+                name = "INT8";
+            }
+            return name;
+        }
+        return {};
+    }
+
+    DeviceInformation SelectDevice(const InferenceEngine::CNNNetwork &network,
+                                   const std::vector<DeviceInformation>& metaDevices,
+                                   const std::vector<std::string>& optCap) {
+        std::vector<DeviceInformation> VPUX;
+        std::vector<DeviceInformation> GPU;
+        std::vector<DeviceInformation> GNA;
+        std::vector<DeviceInformation> CPU;
+        std::vector<DeviceInformation> MYRIAD;
         for (auto& item : metaDevices) {
+            if (item.deviceName.find("VPUX") == 0) {
+                VPUX.push_back(item);
+                continue;
+            }
+            if (item.deviceName.find("GPU") == 0) {
+                GPU.push_back(item);
+                continue;
+            }
+            if (item.deviceName.find("GNA") == 0) {
+                GNA.push_back(item);
+                continue;
+            }
+            if (item.deviceName.find("MYRIAD") == 0) {
+                MYRIAD.push_back(item);
+                continue;
+            }
             if (item.deviceName.find("CPU") == 0) {
-              return item;
+                CPU.push_back(item);
+                continue;
+            }
+            IE_THROW(NotImplemented) << "Auto plugin doesn't support device named " << item.deviceName;
+        }
+
+        // Get network precision
+        auto networkPrecision = GetNetworkPrecision(network);
+
+        auto getCap = [&](std::string&& substr){
+            auto capability = std::find_if(optCap.begin(), optCap.end(),
+                                        [&](const std::string& c)->bool{ return (c.find(substr) != std::string::npos);});
+            return capability;
+        };
+
+        if (VPUX.empty() && GPU.empty() && GNA.empty() && MYRIAD.empty() && CPU.empty()) {
+            IE_THROW(NotFound) << "No available device found";
+        }
+        // dGPU is preferred
+        std::sort(GPU.begin(), GPU.end(), [](DeviceInformation& a, DeviceInformation& b)->bool{return b.deviceName < a.deviceName;});
+
+        if (!VPUX.empty()) {
+            auto capability = getCap("VPUX");
+            if (capability != optCap.end() && capability->find(networkPrecision) != std::string::npos) {
+            return VPUX[0];
             }
         }
-        IE_THROW(NotFound) << "No available device could be used";
+
+        if (!GPU.empty()) {
+            auto capability = getCap("GPU");
+            if (capability != optCap.end() && capability->find(networkPrecision) != std::string::npos) {
+                return GPU[0];
+            }
+        }
+
+        if (!GNA.empty()) {
+            auto capability = getCap("GNA");
+            if (capability != optCap.end() && capability->find(networkPrecision) != std::string::npos) {
+                return GNA[0];
+            }
+        }
+
+        if (!MYRIAD.empty()) {
+            auto capability = getCap("MYRIAD");
+            if (capability != optCap.end() && capability->find(networkPrecision) != std::string::npos) {
+                return MYRIAD[0];
+            }
+        }
+
+        if (CPU.empty()) {
+            IE_THROW(NotFound) << "No available device could be used";
+        }
+        return CPU[0];
     }
-}  // namespace
+} // namespace
 
 AutoInferencePlugin::AutoInferencePlugin() {
     _pluginName = "AUTO";
+}
+
+std::vector<std::string> AutoInferencePlugin::GetOptimizationCapabilities() const {
+    std::vector<std::string> capabilities;
+    std::vector<std::string> queryDeviceLists{"CPU", "GPU", "GNA", "MYRIAD", "VPUX"};
+    for (auto& item : queryDeviceLists) {
+        try {
+            std::vector<std::string> device_cap =
+                    GetCore()->GetMetric(item, METRIC_KEY(OPTIMIZATION_CAPABILITIES));
+            std::string device_cap_str = item + ": ";
+            for (auto &dc : device_cap) {
+                device_cap_str += dc + " ";
+            }
+            capabilities.push_back(device_cap_str);
+        } catch (...) {
+        }
+    }
+    return capabilities;
 }
 
 IE::ExecutableNetworkInternal::Ptr AutoInferencePlugin::LoadExeNetworkImpl(const IE::CNNNetwork& network, const ConfigType& config) {
@@ -50,9 +152,9 @@ IE::ExecutableNetworkInternal::Ptr AutoInferencePlugin::LoadExeNetworkImpl(const
     auto fullConfig = mergeConfigs(_config, config);
     auto deviceChoice = GetDeviceChoice();
     auto metaDevices = ParseMetaDevices(deviceChoice, fullConfig);
+    auto optCap = GetOptimizationCapabilities();
 
-    // FIXME: always select CPU device now
-    DeviceInformation selectedDevice = SelectDevice(metaDevices);
+    DeviceInformation selectedDevice = SelectDevice(network, metaDevices, optCap);
     IE::ExecutableNetwork executableNetwork;
     try {
         auto deviceQr = GetCore()->QueryNetwork(network, selectedDevice.deviceName, selectedDevice.config);
@@ -195,16 +297,16 @@ ConfigType AutoInferencePlugin::GetSupportedConfig(const ConfigType&  config,
 std::vector<DeviceInformation> AutoInferencePlugin::ParseMetaDevices(const std::string& deviceChoice,
                                                                      const ConfigType&  config) const {
     std::vector<DeviceInformation> metaDevices;
-    // parsing the string and splitting to tokens
+    // Parsing the string and splitting to tokens
     std::vector<std::string> devicesWithRequests;
-    // parsing the string and splitting the comma-separated tokens
+    // Parsing the string and splitting the comma-separated tokens
     std::string::size_type i = 0;
     std::string::size_type idelimeter;
     while ((idelimeter = deviceChoice.find(',', i)) != std::string::npos) {
         devicesWithRequests.push_back(deviceChoice.substr(i, idelimeter - i));
         i = idelimeter + 1;
     }
-    // last token in the string (which has no comma after that)
+    // Last token in the string (which has no comma after that)
     devicesWithRequests.push_back(deviceChoice.substr(i, deviceChoice.length() - i));
 
     auto getDeviceConfig = [&] (const DeviceName & deviceWithID) {
@@ -212,7 +314,7 @@ std::vector<DeviceInformation> AutoInferencePlugin::ParseMetaDevices(const std::
         std::string deviceName = deviceParser.getDeviceName();
         ConfigType tconfig = mergeConfigs(_config, config);
 
-        // set device ID if any
+        // Set device ID if any
         std::string deviceIDLocal = deviceParser.getDeviceID();
         if (!deviceIDLocal.empty()) {
             tconfig[IE::PluginConfigParams::KEY_DEVICE_ID] = deviceIDLocal;
@@ -222,14 +324,14 @@ std::vector<DeviceInformation> AutoInferencePlugin::ParseMetaDevices(const std::
     };
 
     for (auto && d : devicesWithRequests) {
-        // create meta device
+        // Create meta device
         metaDevices.push_back({ d, getDeviceConfig(d)});
     }
 
     return metaDevices;
 }
 
-// define CreatePluginEngine to create plugin instance
+// Define CreatePluginEngine to create plugin instance
 static const IE::Version version = {{2, 1}, CI_BUILD_NUMBER, "AutoPlugin"};
 IE_DEFINE_PLUGIN_CREATE_FUNCTION(AutoInferencePlugin, version)
 }  // namespace AutoPlugin

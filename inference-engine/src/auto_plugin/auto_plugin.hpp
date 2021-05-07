@@ -30,6 +30,7 @@ public:
 
 private:
     std::string GetDeviceChoice() const;
+    std::vector<std::string> GetOptimizationCapabilities() const;
     std::vector<AutoPlugin::DeviceInformation> ParseMetaDevices(const std::string& devicesRequestsCfg,
                                                                 const ConfigType&  config) const;
 
