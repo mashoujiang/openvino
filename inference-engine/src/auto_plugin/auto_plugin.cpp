@@ -7,6 +7,7 @@
 #include <memory>
 #include <map>
 #include <unordered_set>
+#include <iostream>
 
 #include <ie_metric_helpers.hpp>
 #include <ie_core.hpp>
@@ -39,33 +40,20 @@ namespace {
     DeviceInformation SelectDevice(const InferenceEngine::CNNNetwork &network,
                                    const std::vector<DeviceInformation>& metaDevices,
                                    const std::vector<std::string>& optCap) {
-        std::vector<DeviceInformation> VPUX;
         std::vector<DeviceInformation> GPU;
-        std::vector<DeviceInformation> GNA;
         std::vector<DeviceInformation> CPU;
-        std::vector<DeviceInformation> MYRIAD;
         for (auto& item : metaDevices) {
-            if (item.deviceName.find("VPUX") == 0) {
-                VPUX.push_back(item);
-                continue;
-            }
+            std::cout << "          item.deviceName: " << item.deviceName << "\n";
             if (item.deviceName.find("GPU") == 0) {
+                std::cout << " [488888888888]" << "\n";
                 GPU.push_back(item);
                 continue;
             }
-            if (item.deviceName.find("GNA") == 0) {
-                GNA.push_back(item);
-                continue;
-            }
-            if (item.deviceName.find("MYRIAD") == 0) {
-                MYRIAD.push_back(item);
-                continue;
-            }
             if (item.deviceName.find("CPU") == 0) {
+                std::cout << " [5333333333333333]" << "\n";
                 CPU.push_back(item);
                 continue;
             }
-            IE_THROW(NotImplemented) << "Auto plugin doesn't support device named " << item.deviceName;
         }
 
         // Get network precision
@@ -77,37 +65,16 @@ namespace {
             return capability;
         };
 
-        if (VPUX.empty() && GPU.empty() && GNA.empty() && MYRIAD.empty() && CPU.empty()) {
+        if (GPU.empty() && CPU.empty()) {
             IE_THROW(NotFound) << "No available device found";
         }
         // dGPU is preferred
         std::sort(GPU.begin(), GPU.end(), [](DeviceInformation& a, DeviceInformation& b)->bool{return b.deviceName < a.deviceName;});
 
-        if (!VPUX.empty()) {
-            auto capability = getCap("VPUX");
-            if (capability != optCap.end() && capability->find(networkPrecision) != std::string::npos) {
-            return VPUX[0];
-            }
-        }
-
         if (!GPU.empty()) {
             auto capability = getCap("GPU");
             if (capability != optCap.end() && capability->find(networkPrecision) != std::string::npos) {
                 return GPU[0];
-            }
-        }
-
-        if (!GNA.empty()) {
-            auto capability = getCap("GNA");
-            if (capability != optCap.end() && capability->find(networkPrecision) != std::string::npos) {
-                return GNA[0];
-            }
-        }
-
-        if (!MYRIAD.empty()) {
-            auto capability = getCap("MYRIAD");
-            if (capability != optCap.end() && capability->find(networkPrecision) != std::string::npos) {
-                return MYRIAD[0];
             }
         }
 
@@ -124,7 +91,7 @@ AutoInferencePlugin::AutoInferencePlugin() {
 
 std::vector<std::string> AutoInferencePlugin::GetOptimizationCapabilities() const {
     std::vector<std::string> capabilities;
-    std::vector<std::string> queryDeviceLists{"CPU", "GPU", "GNA", "MYRIAD", "VPUX"};
+    std::vector<std::string> queryDeviceLists{"CPU", "GPU"};
     for (auto& item : queryDeviceLists) {
         try {
             std::vector<std::string> device_cap =
