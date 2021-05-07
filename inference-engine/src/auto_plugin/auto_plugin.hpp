@@ -29,6 +29,7 @@ public:
     void SetConfig(const ConfigType& config) override;
 
 private:
+    std::vector<std::string> GetOptimizationCapabilities() const;
     std::vector<AutoPlugin::DeviceInformation> GetDeviceChoice(const ConfigType&  config) const;
 
 protected:

@@ -24,18 +24,84 @@ namespace {
         return config;
     }
 
-    DeviceInformation SelectDevice(const std::vector<DeviceInformation>& metaDevices) {
+    std::string GetNetworkPrecision(const InferenceEngine::CNNNetwork &network) {
+        for (auto&& layer : network.getInputsInfo()) {
+            auto precision = layer.second->getPrecision();
+            auto name = std::string(precision.name());
+            if (name == "I8") {
+                name = "INT8";
+            }
+            return name;
+        }
+        return {};
+    }
+
+    DeviceInformation SelectDevice(const InferenceEngine::CNNNetwork &network,
+                                   const std::vector<DeviceInformation>& metaDevices,
+                                   const std::vector<std::string>& optCap) {
+        std::vector<DeviceInformation> GPU;
+        std::vector<DeviceInformation> CPU;
         for (auto& item : metaDevices) {
+            if (item.deviceName.find("GPU") == 0) {
+                GPU.push_back(item);
+                continue;
+            }
             if (item.deviceName.find("CPU") == 0) {
-              return item;
+                CPU.push_back(item);
+                continue;
             }
         }
-        IE_THROW(NotFound) << "No available device could be used";
+
+        // Get network precision
+        auto networkPrecision = GetNetworkPrecision(network);
+
+        auto getCap = [&](std::string&& substr){
+            auto capability = std::find_if(optCap.begin(), optCap.end(),
+                                        [&](const std::string& c)->bool{ return (c.find(substr) != std::string::npos);});
+            return capability;
+        };
+
+        if (GPU.empty() && CPU.empty()) {
+            IE_THROW(NotFound) << "No available device found";
+        }
+        // dGPU is preferred
+        std::sort(GPU.begin(), GPU.end(), [](DeviceInformation& a, DeviceInformation& b)->bool{return b.deviceName < a.deviceName;});
+
+        if (!GPU.empty()) {
+            auto capability = getCap("GPU");
+            if (capability != optCap.end() && capability->find(networkPrecision) != std::string::npos) {
+                return GPU[0];
+            }
+        }
+
+        if (CPU.empty()) {
+            IE_THROW(NotFound) << "No available device could be used";
+        }
+        return CPU[0];
     }
-}  // namespace
+} // namespace
+
 
 AutoInferencePlugin::AutoInferencePlugin() {
     _pluginName = "AUTO";
+}
+
+std::vector<std::string> AutoInferencePlugin::GetOptimizationCapabilities() const {
+    std::vector<std::string> capabilities;
+    std::vector<std::string> queryDeviceLists{"CPU", "GPU"};
+    for (auto& item : queryDeviceLists) {
+        try {
+            std::vector<std::string> device_cap =
+                    GetCore()->GetMetric(item, METRIC_KEY(OPTIMIZATION_CAPABILITIES));
+            std::string device_cap_str = item + ": ";
+            for (auto &dc : device_cap) {
+                device_cap_str += dc + " ";
+            }
+            capabilities.push_back(device_cap_str);
+        } catch (...) {
+        }
+    }
+    return capabilities;
 }
 
 IE::ExecutableNetworkInternal::Ptr AutoInferencePlugin::LoadExeNetworkImpl(const IE::CNNNetwork& network, const ConfigType& config) {
@@ -49,9 +115,9 @@ IE::ExecutableNetworkInternal::Ptr AutoInferencePlugin::LoadExeNetworkImpl(const
 
     auto fullConfig = mergeConfigs(_config, config);
     auto metaDevices = GetDeviceChoice(fullConfig);
+    auto optCap = GetOptimizationCapabilities();
 
-    // FIXME: always select CPU device now
-    DeviceInformation selectedDevice = SelectDevice(metaDevices);
+    DeviceInformation selectedDevice = SelectDevice(network, metaDevices, optCap);
     IE::ExecutableNetwork executableNetwork;
     try {
         executableNetwork = GetCore()->LoadNetwork(network, selectedDevice.deviceName, selectedDevice.config);
@@ -170,7 +236,7 @@ std::vector<AutoPlugin::DeviceInformation> AutoInferencePlugin::GetDeviceChoice(
         std::string deviceName = deviceParser.getDeviceName();
         ConfigType tconfig = mergeConfigs(_config, config);
 
-        // set device ID if any
+        // Set device ID if any
         std::string deviceIDLocal = deviceParser.getDeviceID();
         if (!deviceIDLocal.empty()) {
             tconfig[IE::PluginConfigParams::KEY_DEVICE_ID] = deviceIDLocal;
@@ -200,7 +266,7 @@ ConfigType AutoInferencePlugin::GetSupportedConfig(const ConfigType&  config,
     return supportedConfig;
 }
 
-// define CreatePluginEngine to create plugin instance
+// Define CreatePluginEngine to create plugin instance
 static const IE::Version version = {{2, 1}, CI_BUILD_NUMBER, "AutoPlugin"};
 IE_DEFINE_PLUGIN_CREATE_FUNCTION(AutoInferencePlugin, version)
 }  // namespace AutoPlugin
